@@ -153,7 +153,6 @@ public class CamoGeneFinder {
 			}
 
 			base = bases[0];
-//			logger.debug("base (pos = " + pos + "): " + base);
 
 			/* Record incomplete genomic regions (i.e., 'N') */
 			if(base == 'N' || base == 'n'){
@@ -312,10 +311,8 @@ public class CamoGeneFinder {
 	 * @param vs
 	 * @return SamReader
 	 */
-	 public static SamReader openSam(final File samFile, ValidationStringency vs) {
+	 private static SamReader openSam(final File samFile, ValidationStringency vs) {
 		 
- //    	System.setProperty("java.io.tmpdir", "");
-
 		final SamReaderFactory factory =
 				  SamReaderFactory.makeDefault()
 					  .enable(SamReaderFactory.Option.INCLUDE_SOURCE_IN_RECORDS,

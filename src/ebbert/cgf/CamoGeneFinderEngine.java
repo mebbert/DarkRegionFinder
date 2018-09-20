@@ -105,15 +105,7 @@ public class CamoGeneFinderEngine {
 				.type(Integer.class)
 				.help("The minimum depth (≥) required to identify a camo"
 						+ " region.");
-		
-//		svcOptions
-//				.addArgument("-g", "--ignore-low-coverage-areas")
-//				.dest("IGNORE_LOW_COV")
-//				.metavar("IGNORE_LOW_COV")
-//				.action(Arguments.storeTrue())
-//				.help("Will ignore regions with coverage below 'MIN_DEPTH', if set."
-//						+ " Otherwise, any region with coverage below 'MIN_DEPTH'"
-//						+ " will be treated as a camouflaged region.");
+
 		
 		svcOptions
 				.addArgument("-v", "--validation-stringency")
