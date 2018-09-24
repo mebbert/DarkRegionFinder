@@ -71,11 +71,11 @@ public class CamoGeneFinder {
 		
 		camoWriter = new BufferedWriter(new OutputStreamWriter(
 	              new FileOutputStream(outCamoBed), "utf-8"));
-		camoWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQ0\n");
+		camoWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
 
 		darkWriter = new BufferedWriter(new OutputStreamWriter(
 	              new FileOutputStream(outDarkBed), "utf-8"));
-		darkWriter.write("chrom\tstart\tend\tdepth\n");
+		darkWriter.write("chrom\tstart\tend\tnMapQBetween1And9\tdepth\tpercMapQBetween1And9\n");
 
 		incWriter = new BufferedWriter(new OutputStreamWriter(
 	              new FileOutputStream(outIncBed), "utf-8"));
