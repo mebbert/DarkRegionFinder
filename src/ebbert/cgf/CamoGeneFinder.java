@@ -32,7 +32,8 @@ import htsjdk.samtools.util.SamLocusIterator.RecordAndOffset;
 public class CamoGeneFinder {
 	
 	private static Logger logger = Logger.getLogger(CamoGeneFinder.class);
-	private static int MAPQ_THRESHOLD, MIN_DEPTH, MIN_REGION_SIZE, MIN_MAPQ_0_MASS;
+	private static int MAPQ_THRESHOLD, MIN_CAMO_DEPTH, DARK_DEPTH,
+						MIN_REGION_SIZE, MIN_MAPQ_0_MASS;
 	private static ValidationStringency SAM_VALIDATION_STRINGENCY;
 	
 	BufferedWriter camoWriter, darkWriter, incWriter;
@@ -52,14 +53,14 @@ public class CamoGeneFinder {
 	 * @param mapqThreshold
 	 * @param minMapQ0Mass
 	 * @param minRegionSize
-	 * @param minDepth
+	 * @param minCamoDepth
 	 * @param vs
 	 * @throws IOException
 	 */
 	public CamoGeneFinder(final File samFile, final File outCamoBed,
 			File outDarkBed, File outIncBed,
 			File hgRef, final int mapQThreshold, final int minMapQ0Mass,
-			final int minRegionSize, final int minDepth,
+			final int minRegionSize, final int minCamoDepth, int darkDepth,
 			final ValidationStringency vs/*, int startWalking,
 			int endWalking*/) throws IOException {
 		
@@ -81,7 +82,8 @@ public class CamoGeneFinder {
 
 		CamoGeneFinder.MAPQ_THRESHOLD = mapQThreshold;
 		CamoGeneFinder.MIN_REGION_SIZE = minRegionSize;
-		CamoGeneFinder.MIN_DEPTH = minDepth;
+		CamoGeneFinder.MIN_CAMO_DEPTH = minCamoDepth;
+		CamoGeneFinder.DARK_DEPTH = darkDepth;
 		CamoGeneFinder.MIN_MAPQ_0_MASS = minMapQ0Mass;
 		CamoGeneFinder.SAM_VALIDATION_STRINGENCY = vs;
 		
@@ -134,11 +136,20 @@ public class CamoGeneFinder {
 			/* Returns 1-based position */
 			pos = locus.getPosition();  
 			
+			/* Ensure sequence is present in provided reference */
+			if(hgRefReader.getSequenceDictionary().getSequence(contig) == null){
+				logger.warn("BAM file contains alignments for " + contig
+						+ " but this sequence was not found in the provided"
+						+ " reference.");
+				continue;
+			}
+
 			/* Expects 1-based position (inclusive to inclusive) */
 			bases = hgRefReader.getSubsequenceAt(contig, pos, pos).getBases();
 
+			/* Track progress */ 
         	if(pos % 1000000 == 0){
-        		logger.debug("Assessed " + pos + " loci.");
+        		logger.debug("Assessed " + pos + " loci on " + contig);
         	}		
 
 			
@@ -175,6 +186,18 @@ public class CamoGeneFinder {
 
 				continue;
 			}
+	
+
+			/* Write incomplete regions if large enough. Clear in either case. */
+			if(consecInc >= CamoGeneFinder.MIN_REGION_SIZE) {
+				writeRegion(incRegion, incWriter);
+			}
+
+			/* Clear regardless because we know we're outside an incomplete
+			 * region
+			 */
+			incRegion.clear();
+			consecInc = 0; 		
 
         	
 			/* Get depth at this position. */
@@ -182,22 +205,9 @@ public class CamoGeneFinder {
 			nMapQBelowThreshold = 0;
 			
 			/* If depth ≥ minimum required depth to trust mass */
-			if(depth >= CamoGeneFinder.MIN_DEPTH){
+			if(depth >= CamoGeneFinder.MIN_CAMO_DEPTH){
 
-				/* Write dark and incomplete regions if large enough */
-				if(consecDark >= CamoGeneFinder.MIN_REGION_SIZE){
-					writeRegion(darkRegion, darkWriter);
-				}
-				if(consecInc >= CamoGeneFinder.MIN_REGION_SIZE) {
-					writeRegion(incRegion, incWriter);
-				}
-
-				/* Clear regardless (i.e., even if the region wasn't large enough) */
-				darkRegion.clear();
-				consecDark = 0;
-				incRegion.clear();
-				consecInc = 0; 
-
+				/* Get number of reads with MAPQ ≤ threshold */
 				List<RecordAndOffset> recs = locus.getRecordAndPositions();
 				int mapq;
 				for(RecordAndOffset rec : recs){
@@ -207,6 +217,10 @@ public class CamoGeneFinder {
 					}
 				}
 				
+				/* Calculate % ≤ MAPQ threshold and store if mass ≥ mass
+				 * threshold. If not, write what we have if we reached required
+				 * region size.
+				 */
 				double percMapQ0 = nMapQBelowThreshold / depth * 100;
 				if(percMapQ0 >= CamoGeneFinder.MIN_MAPQ_0_MASS){
 					consecCamo++;
@@ -218,28 +232,54 @@ public class CamoGeneFinder {
 					camoRegion.clear();
 					consecCamo = 0;
 				}
+				else {
+					/* Also clear if we didn't reach the region size */
+					camoRegion.clear();
+					consecCamo = 0;
+				}
 			}
-			else {
-				/* Write camo region if large enough */
-				if(consecCamo >= CamoGeneFinder.MIN_REGION_SIZE) {
-					writeRegion(camoRegion, camoWriter);
-				}
-				if(consecInc >= CamoGeneFinder.MIN_REGION_SIZE) {
-					writeRegion(incRegion, incWriter);
-				}
-				
-				/* Clear regardless (i.e., even if the region wasn't large enough) */
+			else if(consecCamo >= CamoGeneFinder.MIN_REGION_SIZE){
+				writeRegion(camoRegion, camoWriter);
 				camoRegion.clear();
 				consecCamo = 0;
-				incRegion.clear();
-				consecInc = 0;
-				
+			}
+			else {
+				/* Also clear if we didn't reach the region size */
+				camoRegion.clear();
+				consecCamo = 0;
+			}
+
+			/* Check if we're in a dark region, regardless of whether we're
+			 * in a camo region.
+			 */
+			if(depth <= CamoGeneFinder.DARK_DEPTH) {
 				/* Save 'dark' regions with low coverage. */
 				darkRegion.add(darkRegionToString(contig, pos, depth));
 				consecDark++;
-				
 			}
-			
+			else if(consecDark >= CamoGeneFinder.MIN_REGION_SIZE){
+				/* Write dark regions if large enough */
+				writeRegion(darkRegion, darkWriter);
+				darkRegion.clear();
+				consecDark = 0;
+			}
+			else {
+				/* Also clear if we didn't reach the region size */
+				darkRegion.clear();
+				consecDark = 0;
+			}
+
+		}
+		
+		/* Write regions if large enough */
+		if(consecCamo >= CamoGeneFinder.MIN_REGION_SIZE) {
+			writeRegion(camoRegion, camoWriter);
+		}
+		if(consecInc >= CamoGeneFinder.MIN_REGION_SIZE) {
+			writeRegion(incRegion, incWriter);
+		}
+		if(consecDark >= CamoGeneFinder.MIN_REGION_SIZE){
+			writeRegion(darkRegion, darkWriter);
 		}
 
 		camoWriter.close();
