@@ -33,7 +33,8 @@ public class CamoGeneFinder {
 	
 	private static Logger logger = Logger.getLogger(CamoGeneFinder.class);
 	private static int MAPQ_THRESHOLD, MIN_CAMO_DEPTH, DARK_DEPTH,
-						MIN_REGION_SIZE, MIN_MAPQ_0_MASS;
+						DARK_LOWER = 1, DARK_UPPER = 9, MIN_REGION_SIZE,
+						MIN_MAPQ_MASS;
 	private static ValidationStringency SAM_VALIDATION_STRINGENCY;
 	
 	BufferedWriter camoWriter, darkWriter, incWriter;
@@ -51,7 +52,7 @@ public class CamoGeneFinder {
 	 * @param outCamoBed
 	 * @param hgRef
 	 * @param mapqThreshold
-	 * @param minMapQ0Mass
+	 * @param minMapQMass
 	 * @param minRegionSize
 	 * @param minCamoDepth
 	 * @param vs
@@ -59,7 +60,7 @@ public class CamoGeneFinder {
 	 */
 	public CamoGeneFinder(final File samFile, final File outCamoBed,
 			File outDarkBed, File outIncBed,
-			File hgRef, final int mapQThreshold, final int minMapQ0Mass,
+			File hgRef, final int mapQThreshold, final int minMapQMass,
 			final int minRegionSize, final int minCamoDepth, int darkDepth,
 			final ValidationStringency vs/*, int startWalking,
 			int endWalking*/) throws IOException {
@@ -84,7 +85,7 @@ public class CamoGeneFinder {
 		CamoGeneFinder.MIN_REGION_SIZE = minRegionSize;
 		CamoGeneFinder.MIN_CAMO_DEPTH = minCamoDepth;
 		CamoGeneFinder.DARK_DEPTH = darkDepth;
-		CamoGeneFinder.MIN_MAPQ_0_MASS = minMapQ0Mass;
+		CamoGeneFinder.MIN_MAPQ_MASS = minMapQMass;
 		CamoGeneFinder.SAM_VALIDATION_STRINGENCY = vs;
 		
 		this.hgRefReader = new IndexedFastaSequenceFile(hgRef);
@@ -122,16 +123,23 @@ public class CamoGeneFinder {
 
 		LocusInfo locus;
 		int consecCamo = 0, consecDark = 0, consecInc = 0, pos, depth,
-				nMapQBelowThreshold;
+				nMapQBelowThreshold, nMapQBetween1And9;
 		ArrayList<String> camoRegion = new ArrayList<String>(),
 				darkRegion = new ArrayList<String>(),
-				incRegion = new ArrayList<String>();
+				incRegion = new ArrayList<String>(),
+				ignore = new ArrayList<String>();
 		String contig; byte[] bases; byte base;
+		double percMapQ0, percMapQBetween1And9;
 		while(sli.hasNext()){
 
 			locus = sli.next();
 			
 			contig = locus.getSequenceName();
+			
+			/* If this contig is not in the ref, then skip */
+			if(ignore.contains(contig)) {
+				continue;
+			}
 
 			/* Returns 1-based position */
 			pos = locus.getPosition();  
@@ -140,7 +148,8 @@ public class CamoGeneFinder {
 			if(hgRefReader.getSequenceDictionary().getSequence(contig) == null){
 				logger.warn("BAM file contains alignments for " + contig
 						+ " but this sequence was not found in the provided"
-						+ " reference.");
+						+ " reference. Skipping.");
+				ignore.add(contig);
 				continue;
 			}
 
@@ -203,40 +212,34 @@ public class CamoGeneFinder {
 			/* Get depth at this position. */
 			depth = locus.getRecordAndPositions().size();
 			nMapQBelowThreshold = 0;
-			
-			/* If depth ≥ minimum required depth to trust mass */
-			if(depth >= CamoGeneFinder.MIN_CAMO_DEPTH){
+			nMapQBetween1And9 = 0;
 
-				/* Get number of reads with MAPQ ≤ threshold */
-				List<RecordAndOffset> recs = locus.getRecordAndPositions();
-				int mapq;
-				for(RecordAndOffset rec : recs){
-					mapq = rec.getRecord().getMappingQuality();
-					if(mapq <= CamoGeneFinder.MAPQ_THRESHOLD){
-						nMapQBelowThreshold++;
-					}
+			
+			/* Get number of reads with MAPQ ≤ threshold */
+			List<RecordAndOffset> recs = locus.getRecordAndPositions();
+			int mapq;
+			for(RecordAndOffset rec : recs){
+				mapq = rec.getRecord().getMappingQuality();
+				if(mapq <= CamoGeneFinder.MAPQ_THRESHOLD){
+					nMapQBelowThreshold++;
 				}
-				
-				/* Calculate % ≤ MAPQ threshold and store if mass ≥ mass
-				 * threshold. If not, write what we have if we reached required
-				 * region size.
-				 */
-				double percMapQ0 = nMapQBelowThreshold / depth * 100;
-				if(percMapQ0 >= CamoGeneFinder.MIN_MAPQ_0_MASS){
-					consecCamo++;
-					camoRegion.add(camoRegionToString(contig, pos,
-							nMapQBelowThreshold, depth, percMapQ0));
+				else if(mapq >= CamoGeneFinder.DARK_LOWER &&
+						mapq <= CamoGeneFinder.DARK_UPPER) {
+					/* Yes, I just used magic numbers */
+					nMapQBetween1And9++;
 				}
-				else if(consecCamo >= CamoGeneFinder.MIN_REGION_SIZE){
-					writeRegion(camoRegion, camoWriter);
-					camoRegion.clear();
-					consecCamo = 0;
-				}
-				else {
-					/* Also clear if we didn't reach the region size */
-					camoRegion.clear();
-					consecCamo = 0;
-				}
+			}
+
+			/* If depth ≥ minimum required depth to trust mass AND we're above
+			 * required MAPQ mass
+			 */
+			percMapQ0 = depth > 0 ? nMapQBelowThreshold / depth * 100 : -1;
+			if(depth >= CamoGeneFinder.MIN_CAMO_DEPTH &&
+					percMapQ0 >= CamoGeneFinder.MIN_MAPQ_MASS){
+
+				camoRegion.add(camoRegionToString(contig, pos,
+						nMapQBelowThreshold, depth, percMapQ0));
+				consecCamo++;
 			}
 			else if(consecCamo >= CamoGeneFinder.MIN_REGION_SIZE){
 				writeRegion(camoRegion, camoWriter);
@@ -250,11 +253,17 @@ public class CamoGeneFinder {
 			}
 
 			/* Check if we're in a dark region, regardless of whether we're
-			 * in a camo region.
+			 * in a camo region. A region is 'dark' if depth is < DARK_DEPTH
+			 * OR if the percentage of reads with a 0 < MAPQ < 10 is ≥
+			 * MIN_MAPQ_MASS
 			 */
-			if(depth <= CamoGeneFinder.DARK_DEPTH) {
+			percMapQBetween1And9 = depth > 0 ? nMapQBetween1And9 / depth * 100 : -1;
+			if(depth <= CamoGeneFinder.DARK_DEPTH ||
+					percMapQBetween1And9 >= CamoGeneFinder.MIN_MAPQ_MASS) {
+
 				/* Save 'dark' regions with low coverage. */
-				darkRegion.add(darkRegionToString(contig, pos, depth));
+				darkRegion.add(darkRegionToString(contig, pos, nMapQBetween1And9,
+						depth, percMapQBetween1And9));
 				consecDark++;
 			}
 			else if(consecDark >= CamoGeneFinder.MIN_REGION_SIZE){
@@ -306,11 +315,12 @@ public class CamoGeneFinder {
 	 * @return
 	 */
 	private String darkRegionToString(String contigName, int position,
-			int depth) {
+			int nMapQBetween1And9, int depth, double percentMapQBetween1And9) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
 		return contigName + "\t" + (position - 1) + "\t" + position +
-				"\t" + depth + "\n";
+				"\t" + nMapQBetween1And9 + "\t" + depth +
+				"\t" + percentMapQBetween1And9 + "\n";
 	}
 
 	/**
