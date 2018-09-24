@@ -122,14 +122,14 @@ public class CamoGeneFinder {
 		/* Walk along genome identifying 'dark' and 'camouflaged' regions */
 
 		LocusInfo locus;
-		int consecCamo = 0, consecDark = 0, consecInc = 0, pos, depth,
+		int consecCamo = 0, consecDark = 0, consecInc = 0, pos,
 				nMapQBelowThreshold, nMapQBetween1And9;
 		ArrayList<String> camoRegion = new ArrayList<String>(),
 				darkRegion = new ArrayList<String>(),
 				incRegion = new ArrayList<String>(),
 				ignore = new ArrayList<String>();
 		String contig; byte[] bases; byte base;
-		double percMapQ0, percMapQBetween1And9;
+		double percMapQBelowThreshold, percMapQBetween1And9, depth;
 		while(sli.hasNext()){
 
 			locus = sli.next();
@@ -211,19 +211,19 @@ public class CamoGeneFinder {
         	
 			/* Get depth at this position. */
 			depth = locus.getRecordAndPositions().size();
-			nMapQBelowThreshold = 0;
-			nMapQBetween1And9 = 0;
 
 			
 			/* Get number of reads with MAPQ ≤ threshold */
 			List<RecordAndOffset> recs = locus.getRecordAndPositions();
 			int mapq;
+			nMapQBelowThreshold = 0;
+			nMapQBetween1And9 = 0;
 			for(RecordAndOffset rec : recs){
 				mapq = rec.getRecord().getMappingQuality();
 				if(mapq <= CamoGeneFinder.MAPQ_THRESHOLD){
 					nMapQBelowThreshold++;
 				}
-				else if(mapq >= CamoGeneFinder.DARK_LOWER &&
+				if(mapq >= CamoGeneFinder.DARK_LOWER &&
 						mapq <= CamoGeneFinder.DARK_UPPER) {
 					/* Yes, I just used magic numbers */
 					nMapQBetween1And9++;
@@ -233,12 +233,12 @@ public class CamoGeneFinder {
 			/* If depth ≥ minimum required depth to trust mass AND we're above
 			 * required MAPQ mass
 			 */
-			percMapQ0 = depth > 0 ? nMapQBelowThreshold / depth * 100 : -1;
+			percMapQBelowThreshold = depth > 0 ? nMapQBelowThreshold / depth * 100 : -1;
 			if(depth >= CamoGeneFinder.MIN_CAMO_DEPTH &&
-					percMapQ0 >= CamoGeneFinder.MIN_MAPQ_MASS){
+					percMapQBelowThreshold >= CamoGeneFinder.MIN_MAPQ_MASS){
 
 				camoRegion.add(camoRegionToString(contig, pos,
-						nMapQBelowThreshold, depth, percMapQ0));
+						nMapQBelowThreshold, depth, percMapQBelowThreshold));
 				consecCamo++;
 			}
 			else if(consecCamo >= CamoGeneFinder.MIN_REGION_SIZE){
@@ -315,11 +315,11 @@ public class CamoGeneFinder {
 	 * @return
 	 */
 	private String darkRegionToString(String contigName, int position,
-			int nMapQBetween1And9, int depth, double percentMapQBetween1And9) {
+			int nMapQBetween1And9, double depth, double percentMapQBetween1And9) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
 		return contigName + "\t" + (position - 1) + "\t" + position +
-				"\t" + nMapQBetween1And9 + "\t" + depth +
+				"\t" + nMapQBetween1And9 + "\t" + ((int) depth) +
 				"\t" + percentMapQBetween1And9 + "\n";
 	}
 
@@ -332,12 +332,12 @@ public class CamoGeneFinder {
 	 * @return
 	 */
 	private String camoRegionToString(String contigName, int position,
-			int nMapQBelowThreshold, int depth,
+			int nMapQBelowThreshold, double depth,
 			double percentMapQBelowThreshold) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
 		return contigName + "\t" + (position - 1) + "\t" + position +
-				"\t" + nMapQBelowThreshold + "\t" + depth +
+				"\t" + nMapQBelowThreshold + "\t" + ((int) depth) +
 				"\t" + percentMapQBelowThreshold + "\n";
 	}
 	
