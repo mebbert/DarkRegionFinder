@@ -233,7 +233,7 @@ public class CamoGeneFinder {
 			/* If depth ≥ minimum required depth to trust mass AND we're above
 			 * required MAPQ mass
 			 */
-			percMapQBelowThreshold = depth > 0 ? nMapQBelowThreshold / depth * 100 : -1;
+			percMapQBelowThreshold = depth > 0 ? Math.round(nMapQBelowThreshold / depth * 100) : -1;
 			if(depth >= CamoGeneFinder.MIN_CAMO_DEPTH &&
 					percMapQBelowThreshold >= CamoGeneFinder.MIN_MAPQ_MASS){
 
@@ -257,7 +257,7 @@ public class CamoGeneFinder {
 			 * OR if the percentage of reads with a 0 < MAPQ < 10 is ≥
 			 * MIN_MAPQ_MASS
 			 */
-			percMapQBetween1And9 = depth > 0 ? nMapQBetween1And9 / depth * 100 : -1;
+			percMapQBetween1And9 = depth > 0 ? Math.round(nMapQBetween1And9 / depth * 100) : -1;
 			if(depth <= CamoGeneFinder.DARK_DEPTH ||
 					percMapQBetween1And9 >= CamoGeneFinder.MIN_MAPQ_MASS) {
 
