@@ -90,40 +90,39 @@ public class CamoGeneFinderEngine {
 						+ " calling (e.g., MAPQ ≤ 9).");
 	
 		svcOptions
-				.addArgument("-m", "--min-mapq-mass")
-				.dest("MIN_MAPQ_MASS")
-				.metavar("MAPQ_MASS")
+				.addArgument("-m", "--min-dark-mapq-mass")
+				.dest("MIN_DARK_MAPQ_MASS")
+				.metavar("DARK_MAPQ_MASS")
 				.setDefault(90)
 				.type(Integer.class)
-				.help("The minimum percentage (≥) of reads below the MAPQ threshold"
-						+ " for the locus to be considered camoflauged or dark."
-						+ " Camouflaged loci where the percentage is below this threshold"
-						+ " will not be reported. Dark regions will still be"
-						+ " reported if the depth is < --dark-depth, but will"
-						+ " ALSO be reported if the percentage of reads with a"
-						+ " 0 < MAPQ < 10 exceeds this threshold.");
+				.help("The minimum percentage (≥) of reads below the DARK_MAPQ threshold"
+						+ " for the locus to be considered dark."
+						+ " Dark loci where the percentage is below this threshold"
+						+ " will still be reported if the depth is < --dark-depth"
+						+ " Regardless of depth, loci will be reported if the percentage of reads with a"
+						+ " MAPQ < 10 exceeds this threshold.");
 		
 		svcOptions
-				.addArgument("-d", "--min-camo-depth")
-				.dest("MIN_CAMO_DEPTH")
-				.metavar("CAMO_DEPTH")
-				.setDefault(5)
+				.addArgument("-r", "--min-camo-mapq-mass")
+				.dest("MIN_CAMO_MAPQ_MASS")
+				.metavar("CAMO_MAPQ_MASS")
+				.setDefault(50)
 				.type(Integer.class)
-				.help("The minimum depth (≥) required to identify a camo"
-						+ " region.");
+				.help("The minimum percentage (≥) of dark reads below the CAMO_MAPQ threshold"
+						+ "for locus to be considered Camouflaged. Camouflaged loci where the"
+						+ "percentage is below this threshold will not be reported, but still"
+						+ " will be recorded as dark regions.");
 
 		svcOptions
-				.addArgument("-r", "--dark-depth")
+				.addArgument("-d", "--dark-depth")
 				.dest("DARK_DEPTH")
 				.metavar("DARK_DEPTH")
-				.setDefault(20)
+				.setDefault(5)
 				.type(Integer.class)
 				.help("The depth (≤) at which a region is considered 'dark' (i.e.,"
 						+ " it's not deep enough to reliably call heterozygous"
 						+ " mutations in the organism). Regions where"
-						+ " CAMO_DEPTH < DEPTH < DARK_DEPTH, and that are"
-						+ " camouflaged, will be reported"
-						+ " in both the camo and dark bed files.");
+						+ " DEPTH ≤ DARK_DEPTH, will be reported regardless of MAPQ mass");
 
 		svcOptions
 				.addArgument("-v", "--validation-stringency")
@@ -158,7 +157,6 @@ public class CamoGeneFinderEngine {
 				.addArgument("-c", "--camo-bed-output")
 				.dest("CAMO_BED")
 				.type(String.class)
-				.required(true)
 				.setDefault("camo.bed")
 				.help("The output BED file for camouflaged regions. Camouflaged"
 						+ " regions are those where reads map equally well to"
@@ -169,7 +167,6 @@ public class CamoGeneFinderEngine {
 				.addArgument("-a", "--dark-bed-output")
 				.dest("DARK_BED")
 				.type(String.class)
-				.required(true)
 				.setDefault("dark.bed")
 				.help("The output BED file for dark regions. Dark regions are"
 						+ " those with low coverage (depth < --dark-depth).");
@@ -178,7 +175,6 @@ public class CamoGeneFinderEngine {
 				.addArgument("-n", "--incomplete-bed-output")
 				.dest("INC_BED")
 				.type(String.class)
-				.required(true)
 				.setDefault("incomplete.bed")
 				.help("The output BED file for incomplete regions. Incomplete"
 						+ " regions are those where the bases are unknown"
@@ -204,9 +200,9 @@ public class CamoGeneFinderEngine {
 		String incBed = parsedArgs.getString("INC_BED");
 		String hgRef = parsedArgs.getString("HG_REF");
 
-		int minMapQMass = parsedArgs.getInt("MIN_MAPQ_MASS");
+		int minDarkMapQMass = parsedArgs.getInt("MIN_DARK_MAPQ_MASS");
+		int minCamoMapQMass = parsedArgs.getInt("MIN_CAMO_MAPQ_MASS");
 		int minRegionSize = parsedArgs.getInt("MIN_SIZE");
-		int minCamoDepth = parsedArgs.getInt("MIN_CAMO_DEPTH");
 		int darkDepth = parsedArgs.getInt("DARK_DEPTH");
 		int mapQThresh = parsedArgs.getInt("CAMO_MAPQ_THRESHOLD");
 		String stringency = parsedArgs.getString("STRINGENCY");
@@ -227,8 +223,8 @@ public class CamoGeneFinderEngine {
 			// Do your thing.
 			CamoGeneFinder cgf = new CamoGeneFinder(new File(sam),
 					new File(camoBed), new File(darkBed), new File(incBed),
-					new File(hgRef), mapQThresh, minMapQMass, minRegionSize,
-					minCamoDepth, darkDepth, vs);
+					new File(hgRef), mapQThresh, minCamoMapQMass, minDarkMapQMass,
+					minRegionSize, darkDepth, vs);
 
 			cgf.startWalkingByLocus();
 

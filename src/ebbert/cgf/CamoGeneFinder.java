@@ -9,6 +9,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.TreeSet;
 
@@ -32,9 +33,10 @@ import htsjdk.samtools.util.SamLocusIterator.RecordAndOffset;
 public class CamoGeneFinder {
 	
 	private static Logger logger = Logger.getLogger(CamoGeneFinder.class);
-	private static int MAPQ_THRESHOLD, MIN_CAMO_DEPTH, DARK_DEPTH,
-						DARK_LOWER = 1, DARK_UPPER = 9, MIN_REGION_SIZE,
-						MIN_MAPQ_MASS;
+	private static int MAPQ_CAMO_THRESHOLD, DARK_DEPTH,
+						MAPQ_DARK_THRESHOLD = 9, MIN_REGION_SIZE,
+						MIN_DARK_MAPQ_MASS, MIN_CAMO_MAPQ_MASS,
+                        MAX_ARRAY_SIZE = 10000;
 	private static ValidationStringency SAM_VALIDATION_STRINGENCY;
 	
 	BufferedWriter camoWriter, darkWriter, incWriter;
@@ -43,26 +45,28 @@ public class CamoGeneFinder {
 	private SamReader reader;
 	
 	private IndexedFastaSequenceFile hgRefReader;
-	
 
-	/**
-	 * Instantiate a CamoGeneFinder object.
-	 * 
-	 * @param samFile
-	 * @param outCamoBed
-	 * @param hgRef
-	 * @param mapqThreshold
-	 * @param minMapQMass
-	 * @param minRegionSize
-	 * @param minCamoDepth
-	 * @param vs
-	 * @throws IOException
-	 */
+
+    /**
+     *
+     * @param samFile
+     * @param outCamoBed
+     * @param outDarkBed
+     * @param outIncBed
+     * @param hgRef
+     * @param mapQThreshold
+     * @param minCamoMapQMass
+     * @param minDarkMapQMass
+     * @param minRegionSize
+     * @param darkDepth
+     * @param vs
+     * @throws IOException
+     */
 	public CamoGeneFinder(final File samFile, final File outCamoBed,
-			File outDarkBed, File outIncBed,
-			File hgRef, final int mapQThreshold, final int minMapQMass,
-			final int minRegionSize, final int minCamoDepth, int darkDepth,
-			final ValidationStringency vs/*, int startWalking,
+			File outDarkBed, File outIncBed, File hgRef,
+            final int mapQThreshold, final int minCamoMapQMass,
+			final int minDarkMapQMass, final int minRegionSize,
+            int darkDepth, final ValidationStringency vs/*, int startWalking,
 			int endWalking*/) throws IOException {
 		
 		// Would be nice to be able to specify start/end locations
@@ -75,17 +79,17 @@ public class CamoGeneFinder {
 
 		darkWriter = new BufferedWriter(new OutputStreamWriter(
 	              new FileOutputStream(outDarkBed), "utf-8"));
-		darkWriter.write("chrom\tstart\tend\tnMapQBetween1And9\tdepth\tpercMapQBetween1And9\n");
+		darkWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
 
 		incWriter = new BufferedWriter(new OutputStreamWriter(
 	              new FileOutputStream(outIncBed), "utf-8"));
 		incWriter.write("chrom\tstart\tend\n");
 
-		CamoGeneFinder.MAPQ_THRESHOLD = mapQThreshold;
+		CamoGeneFinder.MAPQ_CAMO_THRESHOLD = mapQThreshold;
 		CamoGeneFinder.MIN_REGION_SIZE = minRegionSize;
-		CamoGeneFinder.MIN_CAMO_DEPTH = minCamoDepth;
 		CamoGeneFinder.DARK_DEPTH = darkDepth;
-		CamoGeneFinder.MIN_MAPQ_MASS = minMapQMass;
+		CamoGeneFinder.MIN_CAMO_MAPQ_MASS = minCamoMapQMass;
+		CamoGeneFinder.MIN_DARK_MAPQ_MASS = minDarkMapQMass;
 		CamoGeneFinder.SAM_VALIDATION_STRINGENCY = vs;
 		
 		this.hgRefReader = new IndexedFastaSequenceFile(hgRef);
@@ -123,14 +127,31 @@ public class CamoGeneFinder {
 
 		LocusInfo locus;
 		int consecCamo = 0, consecDark = 0, consecInc = 0, pos,
-				nMapQBelowThreshold, nMapQBetween1And9;
+				nMapQBelowCamoThreshold, nMapQBelowDarkThreshold;
 		ArrayList<String> camoRegion = new ArrayList<String>(),
 				darkRegion = new ArrayList<String>(),
-				incRegion = new ArrayList<String>(),
-				ignore = new ArrayList<String>();
+				incRegion = new ArrayList<String>();
+		HashSet<String> ignore = new HashSet<String>();
 		String contig; byte[] bases; byte base;
-		double percMapQBelowThreshold, percMapQBetween1And9, depth;
+		double percMapQBelowDarkThreshold, percMapQBelowCamoThreshold, depth;
+
 		while(sli.hasNext()){
+
+		    /* write out and clear regions if the arrays are getting too big (in order to save memory)
+		       assuming MAX_ARRAY_SIZE > MIN_REGION_SIZE so we don't need to check consecCamo before printing
+		     */
+		    if ( incRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
+		        writeRegion(incRegion, incWriter);
+		        incRegion.clear();
+            }
+            if ( darkRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
+                writeRegion(darkRegion, darkWriter);
+                darkRegion.clear();
+            }
+            if ( camoRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
+                writeRegion(camoRegion, camoWriter);
+                camoRegion.clear();
+            }
 
 			locus = sli.next();
 			
@@ -216,67 +237,71 @@ public class CamoGeneFinder {
 			/* Get number of reads with MAPQ ≤ threshold */
 			List<RecordAndOffset> recs = locus.getRecordAndPositions();
 			int mapq;
-			nMapQBelowThreshold = 0;
-			nMapQBetween1And9 = 0;
+			nMapQBelowCamoThreshold = 0;
+			nMapQBelowDarkThreshold = 0;
 			for(RecordAndOffset rec : recs){
 				mapq = rec.getRecord().getMappingQuality();
-				if(mapq <= CamoGeneFinder.MAPQ_THRESHOLD){
-					nMapQBelowThreshold++;
+				if(mapq <= CamoGeneFinder.MAPQ_CAMO_THRESHOLD){
+					nMapQBelowCamoThreshold++;
 				}
-				if(mapq >= CamoGeneFinder.DARK_LOWER &&
-						mapq <= CamoGeneFinder.DARK_UPPER) {
+				if(mapq <= CamoGeneFinder.MAPQ_DARK_THRESHOLD){
 					/* Yes, I just used magic numbers */
-					nMapQBetween1And9++;
+					nMapQBelowDarkThreshold++;
 				}
 			}
 
 			/* If depth ≥ minimum required depth to trust mass AND we're above
 			 * required MAPQ mass
 			 */
-			percMapQBelowThreshold = depth > 0 ? Math.round(nMapQBelowThreshold / depth * 100) : -1;
-			if(depth >= CamoGeneFinder.MIN_CAMO_DEPTH &&
-					percMapQBelowThreshold >= CamoGeneFinder.MIN_MAPQ_MASS){
+			percMapQBelowDarkThreshold = depth > 0 ? Math.round(nMapQBelowDarkThreshold / depth * 100) : -1;
+			percMapQBelowCamoThreshold = depth > 0 ? Math.round(nMapQBelowCamoThreshold / depth * 100) : -1;
 
-				camoRegion.add(camoRegionToString(contig, pos,
-						nMapQBelowThreshold, depth, percMapQBelowThreshold));
-				consecCamo++;
-			}
-			else if(consecCamo >= CamoGeneFinder.MIN_REGION_SIZE){
-				writeRegion(camoRegion, camoWriter);
-				camoRegion.clear();
-				consecCamo = 0;
-			}
-			else {
-				/* Also clear if we didn't reach the region size */
-				camoRegion.clear();
-				consecCamo = 0;
-			}
+            /* Check if we're in a dark region
+             * A region is 'dark' if depth is < DARK_DEPTH OR if the
+             * percentage of reads with a MAPQ < 10 is ≥ MIN_DARK_MAPQ_MASS
+             */
+            if(depth <= CamoGeneFinder.DARK_DEPTH ||
+                    percMapQBelowDarkThreshold >= CamoGeneFinder.MIN_DARK_MAPQ_MASS) {
 
-			/* Check if we're in a dark region, regardless of whether we're
-			 * in a camo region. A region is 'dark' if depth is < DARK_DEPTH
-			 * OR if the percentage of reads with a 0 < MAPQ < 10 is ≥
-			 * MIN_MAPQ_MASS
-			 */
-			percMapQBetween1And9 = depth > 0 ? Math.round(nMapQBetween1And9 / depth * 100) : -1;
-			if(depth <= CamoGeneFinder.DARK_DEPTH ||
-					percMapQBetween1And9 >= CamoGeneFinder.MIN_MAPQ_MASS) {
+                /* Save 'dark' regions with low coverage or high mass MapQ < 10. */
+                darkRegion.add(darkRegionToString(contig, pos, nMapQBelowDarkThreshold,
+                        depth, percMapQBelowDarkThreshold));
+                consecDark++;
 
-				/* Save 'dark' regions with low coverage. */
-				darkRegion.add(darkRegionToString(contig, pos, nMapQBetween1And9,
-						depth, percMapQBetween1And9));
-				consecDark++;
-			}
-			else if(consecDark >= CamoGeneFinder.MIN_REGION_SIZE){
-				/* Write dark regions if large enough */
-				writeRegion(darkRegion, darkWriter);
-				darkRegion.clear();
-				consecDark = 0;
-			}
-			else {
-				/* Also clear if we didn't reach the region size */
-				darkRegion.clear();
-				consecDark = 0;
-			}
+                /*  With in a dark region check if we're also in a camo region
+                 *  camo regions are a subset of dark regions where depth is sufficient (> DARK_DEPTH) AND
+                 *  the percentage of reads with MAPQ = 0 is ≥ MIN_CAMO_MAPQ_MASS
+                 */
+                if(depth > CamoGeneFinder.DARK_DEPTH &&
+                        percMapQBelowCamoThreshold >= CamoGeneFinder.MIN_CAMO_MAPQ_MASS){
+
+                    camoRegion.add(camoRegionToString(contig, pos,
+                            nMapQBelowCamoThreshold, depth, percMapQBelowCamoThreshold));
+                    consecCamo++;
+                }
+                else if(consecCamo >= CamoGeneFinder.MIN_REGION_SIZE){
+                    writeRegion(camoRegion, camoWriter);
+                    camoRegion.clear();
+                    consecCamo = 0;
+                }
+                else {
+                    /* Also clear if we didn't reach the region size */
+                    camoRegion.clear();
+                    consecCamo = 0;
+                }
+
+            }
+            else if(consecDark >= CamoGeneFinder.MIN_REGION_SIZE){
+                /* Write dark regions if large enough */
+                writeRegion(darkRegion, darkWriter);
+                darkRegion.clear();
+                consecDark = 0;
+            }
+            else {
+                /* Also clear if we didn't reach the region size */
+                darkRegion.clear();
+                consecDark = 0;
+            }
 
 		}
 		
@@ -305,40 +330,59 @@ public class CamoGeneFinder {
 	private String incompleteRegionToString(String contigName, int position) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
-		return contigName + "\t" + (position - 1) + "\t" + position + "\n";
+        /* Use StringBuilder to save memory */
+        StringBuilder sb = new StringBuilder();
+        sb.append(contigName).append("\t")
+                .append(position - 1).append("\t")
+                .append(position).append("\n");
+        return sb.toString();
 	}
 
-	/**
-	 * @param seqName
-	 * @param position
-	 * @param depth
-	 * @return
-	 */
+    /**
+     *
+     * @param contigName
+     * @param position
+     * @param nMapQBelowDarkThreshold
+     * @param depth
+     * @param percentMapQBelowDarkThreshold
+     * @return
+     */
 	private String darkRegionToString(String contigName, int position,
-			int nMapQBetween1And9, double depth, double percentMapQBetween1And9) {
+			int nMapQBelowDarkThreshold, double depth, double percentMapQBelowDarkThreshold) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
-		return contigName + "\t" + (position - 1) + "\t" + position +
-				"\t" + nMapQBetween1And9 + "\t" + ((int) depth) +
-				"\t" + percentMapQBetween1And9 + "\n";
+        StringBuilder sb = new StringBuilder();
+        sb.append(contigName).append("\t")
+                .append(position - 1).append("\t")
+                .append(position).append("\t")
+                .append(nMapQBelowDarkThreshold).append("\t")
+                .append((int) depth).append("\t")
+                .append(percentMapQBelowDarkThreshold).append("\n");
+        return sb.toString();
 	}
 
-	/**
-	 * @param seqName
-	 * @param position
-	 * @param nMapQBelowThreshold
-	 * @param depth
-	 * @param percentMapQBelowThreshold
-	 * @return
-	 */
+    /**
+     *
+     * @param contigName
+     * @param position
+     * @param nMapQBelowCamoThreshold
+     * @param depth
+     * @param percentMapQBelowCamoThreshold
+     * @return
+     */
 	private String camoRegionToString(String contigName, int position,
-			int nMapQBelowThreshold, double depth,
-			double percentMapQBelowThreshold) {
+			int nMapQBelowCamoThreshold, double depth,
+			double percentMapQBelowCamoThreshold) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
-		return contigName + "\t" + (position - 1) + "\t" + position +
-				"\t" + nMapQBelowThreshold + "\t" + ((int) depth) +
-				"\t" + percentMapQBelowThreshold + "\n";
+        StringBuilder sb = new StringBuilder();
+        sb.append(contigName).append("\t")
+                .append(position - 1).append("\t")
+                .append(position).append("\t")
+                .append(nMapQBelowCamoThreshold).append("\t")
+                .append((int) depth).append("\t")
+                .append(percentMapQBelowCamoThreshold).append("\n");
+        return sb.toString();
 	}
 	
 	/**
