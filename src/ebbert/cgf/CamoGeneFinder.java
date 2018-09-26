@@ -127,12 +127,13 @@ public class CamoGeneFinder {
 
 		LocusInfo locus;
 		int consecCamo = 0, consecDark = 0, consecInc = 0, pos,
-				nMapQBelowCamoThreshold, nMapQBelowDarkThreshold;
+				nMapQBelowCamoThreshold, mapq, nMapQBelowDarkThreshold;
 		ArrayList<String> camoRegion = new ArrayList<String>(),
 				darkRegion = new ArrayList<String>(),
 				incRegion = new ArrayList<String>();
 		HashSet<String> ignore = new HashSet<String>();
 		String contig; byte[] bases; byte base;
+		List<RecordAndOffset> recs = null;
 		double percMapQBelowDarkThreshold, percMapQBelowCamoThreshold, depth;
 
 		while(sli.hasNext()){
@@ -140,15 +141,15 @@ public class CamoGeneFinder {
 		    /* write out and clear regions if the arrays are getting too big (in order to save memory)
 		       assuming MAX_ARRAY_SIZE > MIN_REGION_SIZE so we don't need to check consecCamo before printing
 		     */
-		    if ( incRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
+		    if ( consecInc > CamoGeneFinder.MIN_REGION_SIZE && incRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
 		        writeRegion(incRegion, incWriter);
 		        incRegion.clear();
             }
-            if ( darkRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
+            if ( consecDark > CamoGeneFinder.MIN_REGION_SIZE && darkRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
                 writeRegion(darkRegion, darkWriter);
                 darkRegion.clear();
             }
-            if ( camoRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
+            if ( consecCamo > CamoGeneFinder.MIN_REGION_SIZE && camoRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
                 writeRegion(camoRegion, camoWriter);
                 camoRegion.clear();
             }
@@ -182,17 +183,8 @@ public class CamoGeneFinder {
         		logger.debug("Assessed " + pos + " loci on " + contig);
         	}		
 
-			
-			/* Sanity check that we're only getting one base back */
-			if(bases.length > 1) {
-				logger.error("Expected only one base, but received " + bases.length);
-				camoWriter.close();
-				darkWriter.close();
-				incWriter.close();
-				sli.close();
-				throw new Exception("Expected only one base, but received " + bases.length);
-			}
 
+        	/* bases array contains only one element, so extract this base */
 			base = bases[0];
 
 			/* Record incomplete genomic regions (i.e., 'N') */
@@ -235,8 +227,7 @@ public class CamoGeneFinder {
 
 			
 			/* Get number of reads with MAPQ ≤ threshold */
-			List<RecordAndOffset> recs = locus.getRecordAndPositions();
-			int mapq;
+			recs = locus.getRecordAndPositions();
 			nMapQBelowCamoThreshold = 0;
 			nMapQBelowDarkThreshold = 0;
 			for(RecordAndOffset rec : recs){
@@ -245,14 +236,11 @@ public class CamoGeneFinder {
 					nMapQBelowCamoThreshold++;
 				}
 				if(mapq <= CamoGeneFinder.MAPQ_DARK_THRESHOLD){
-					/* Yes, I just used magic numbers */
 					nMapQBelowDarkThreshold++;
 				}
 			}
 
-			/* If depth ≥ minimum required depth to trust mass AND we're above
-			 * required MAPQ mass
-			 */
+
 			percMapQBelowDarkThreshold = depth > 0 ? Math.round(nMapQBelowDarkThreshold / depth * 100) : -1;
 			percMapQBelowCamoThreshold = depth > 0 ? Math.round(nMapQBelowCamoThreshold / depth * 100) : -1;
 
@@ -280,6 +268,7 @@ public class CamoGeneFinder {
                     consecCamo++;
                 }
                 else if(consecCamo >= CamoGeneFinder.MIN_REGION_SIZE){
+                    /* just exited a Camo region, write out region if big enough */
                     writeRegion(camoRegion, camoWriter);
                     camoRegion.clear();
                     consecCamo = 0;
