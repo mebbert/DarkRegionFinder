@@ -151,7 +151,8 @@ public class CamoGeneFinderEngine {
 				.type(String.class)
 				.required(true)
 				.help("The human genome reference file. Must also be indexed "
-						+ "by 'samtools faidx'.");
+						+ "by 'samtools faidx' and have a Picard sequence"
+						+ " dictionary.");
 
 		ioOptions
 				.addArgument("-c", "--camo-bed-output")
