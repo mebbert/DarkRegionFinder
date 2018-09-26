@@ -98,9 +98,9 @@ public class CamoGeneFinderEngine {
 				.help("The minimum percentage (≥) of reads below the DARK_MAPQ threshold"
 						+ " for the locus to be considered dark."
 						+ " Dark loci where the percentage is below this threshold"
-						+ " will still be reported if the depth is < --dark-depth"
+						+ " will still be reported if the depth is < DARK_DEPTH"
 						+ " Regardless of depth, loci will be reported if the percentage of reads with a"
-						+ " MAPQ < 10 exceeds this threshold.");
+						+ " MAPQ ≤ 9 exceeds this threshold.");
 		
 		svcOptions
 				.addArgument("-r", "--min-camo-mapq-mass")
@@ -109,9 +109,12 @@ public class CamoGeneFinderEngine {
 				.setDefault(50)
 				.type(Integer.class)
 				.help("The minimum percentage (≥) of dark reads below the CAMO_MAPQ threshold"
-						+ "for locus to be considered Camouflaged. Camouflaged loci where the"
-						+ "percentage is below this threshold will not be reported, but still"
-						+ " will be recorded as dark regions.");
+						+ " for locus to be considered camouflaged. Camouflaged loci where the"
+						+ " percentage is below this threshold will not be reported, but"
+						+ " will be recorded as dark regions. e.g., a camo region"
+						+ " will be reported if there are > DARK_MAPQ_MASS reads"
+						+ " with MAPQ ≤ 9 AND the percentage of reads above this"
+						+ " value (CAMO_MAPQ_MASS) have a MAPQ ≤ CAMO_MAPQ_THRESHOLD.");
 
 		svcOptions
 				.addArgument("-d", "--dark-depth")
