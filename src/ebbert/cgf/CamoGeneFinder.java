@@ -9,6 +9,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.TreeSet;
 
@@ -34,7 +35,7 @@ public class CamoGeneFinder {
 	private static Logger logger = Logger.getLogger(CamoGeneFinder.class);
 	private static int MAPQ_THRESHOLD, MIN_CAMO_DEPTH, DARK_DEPTH,
 						DARK_LOWER = 1, DARK_UPPER = 9, MIN_REGION_SIZE,
-						MIN_MAPQ_MASS;
+						MIN_MAPQ_MASS, MAX_ARRAY_SIZE = 10000;
 	private static ValidationStringency SAM_VALIDATION_STRINGENCY;
 	
 	BufferedWriter camoWriter, darkWriter, incWriter;
@@ -126,11 +127,27 @@ public class CamoGeneFinder {
 				nMapQBelowThreshold, nMapQBetween1And9;
 		ArrayList<String> camoRegion = new ArrayList<String>(),
 				darkRegion = new ArrayList<String>(),
-				incRegion = new ArrayList<String>(),
-				ignore = new ArrayList<String>();
+				incRegion = new ArrayList<String>();
+		HashSet<String> ignore = new HashSet<String>();
 		String contig; byte[] bases; byte base;
 		double percMapQBelowThreshold, percMapQBetween1And9, depth;
 		while(sli.hasNext()){
+
+		    /* write out and clear regions if the arrays are getting too big (in order to save memory)
+		       assuming MAX_ARRAY_SIZE > MIN_REGION_SIZE so we don't need to check consecCamo before printing
+		     */
+		    if ( incRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
+		        writeRegion(incRegion, incWriter);
+		        incRegion.clear();
+            }
+            if ( darkRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
+                writeRegion(darkRegion, darkWriter);
+                darkRegion.clear();
+            }
+            if ( camoRegion.size() > CamoGeneFinder.MAX_ARRAY_SIZE) {
+                writeRegion(camoRegion, camoWriter);
+                camoRegion.clear();
+            }
 
 			locus = sli.next();
 			
@@ -305,7 +322,12 @@ public class CamoGeneFinder {
 	private String incompleteRegionToString(String contigName, int position) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
-		return contigName + "\t" + (position - 1) + "\t" + position + "\n";
+        /* Use StringBuilder to save memory */
+        StringBuilder sb = new StringBuilder();
+        sb.append(contigName).append("\t")
+                .append(position - 1).append("\t")
+                .append(position).append("\n");
+        return sb.toString();
 	}
 
 	/**
@@ -318,9 +340,14 @@ public class CamoGeneFinder {
 			int nMapQBetween1And9, double depth, double percentMapQBetween1And9) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
-		return contigName + "\t" + (position - 1) + "\t" + position +
-				"\t" + nMapQBetween1And9 + "\t" + ((int) depth) +
-				"\t" + percentMapQBetween1And9 + "\n";
+        StringBuilder sb = new StringBuilder();
+        sb.append(contigName).append("\t")
+                .append(position - 1).append("\t")
+                .append(position).append("\t")
+                .append(nMapQBetween1And9).append("\t")
+                .append((int) depth).append("\t")
+                .append(percentMapQBetween1And9).append("\n");
+        return sb.toString();
 	}
 
 	/**
@@ -336,9 +363,14 @@ public class CamoGeneFinder {
 			double percentMapQBelowThreshold) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
-		return contigName + "\t" + (position - 1) + "\t" + position +
-				"\t" + nMapQBelowThreshold + "\t" + ((int) depth) +
-				"\t" + percentMapQBelowThreshold + "\n";
+        StringBuilder sb = new StringBuilder();
+        sb.append(contigName).append("\t")
+                .append(position - 1).append("\t")
+                .append(position).append("\t")
+                .append(nMapQBelowThreshold).append("\t")
+                .append((int) depth).append("\t")
+                .append(percentMapQBelowThreshold).append("\n");
+        return sb.toString();
 	}
 	
 	/**
