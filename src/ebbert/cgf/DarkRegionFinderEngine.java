@@ -11,6 +11,7 @@ import org.apache.log4j.Logger;
 
 import htsjdk.samtools.ValidationStringency;
 import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.ArgumentGroup;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
@@ -47,14 +48,17 @@ public class DarkRegionFinderEngine {
 	private ArgumentParser init(String[] args){
 		ArgumentParser parser = ArgumentParsers.newArgumentParser("DarkRegionFinder");
 		parser.description("The Dark Region Finder will identify"
-				+ " regions where the genome is 'dark', or"
+				+ " regions where the genome is 'dark' or"
 				+ " 'incomplete'. Dark regions are the regions of the genome where it is"
-                + " impossible to call variants. We define dark regions in two categories:"
-				+ " Low-coverage regions are those where depth is less than the defined '--min-depth'"
-				+ " threshold. And poor-MapQ regions are those that have a 0 < MAPQ < 10. Incomplete regions are"
-				+ " simply those where nucleotides are unknown (i.e., 'N' or 'n'). Incomplete"
-				+ " regions are considered separate from dark regions (i.e.,"
-				+ " they are not included as a dark region, and vice-versa).");
+                + " generally possible to call variants using standard methods."
+                + " We define dark regions in two categories:"
+				+ " (1) Low-coverage regions where depth is less than"
+				+ " the defined '--min-depth' threshold, and (2) low-MapQ"
+				+ " regions where 0 < MAPQ < 10 (default) for a majority of reads in the"
+				+ " pileup. Incomplete regions are simply those where"
+				+ " nucleotides are unknown (i.e., 'N' or 'n'). Incomplete"
+				+ " and dark regions are mutually exclusive (i.e.,"
+				+ " incomplete are not included as a dark region, and vice-versa).");
 		parser.defaultHelp(true);
 		
 		ArgumentGroup svcOptions = parser.addArgumentGroup("Dark Region Finder arguments");
@@ -81,7 +85,8 @@ public class DarkRegionFinderEngine {
 				.help("The MAPQ threshold (≤) at which a read is \'inadequately\'"
 						+ " aligned and considered \'dark\'. Generally"
 						+ " recommended to use MAPQ ≤ 9"
-						+ " as this is the mapQ cut off used by GATK when filtering out reads");
+						+ " as this is the default MAPQ cut off used by GATK"
+						+ " when filtering reads");
 
 		svcOptions
 				.addArgument("-m", "--min-mapq-mass")
@@ -89,10 +94,10 @@ public class DarkRegionFinderEngine {
 				.metavar("MAPQ_MASS")
 				.setDefault(90)
 				.type(Integer.class)
-				.help("The minimum percentage (≥) of reads below the MAPQ_THRESHOLD"
-						+ " for the locus to be considered dark."
+				.help("The minimum percentage (≥) of reads below the"
+						+ " --mapq-threshold for the locus to be considered dark."
 						+ " Dark loci where the percentage is below this threshold"
-						+ " will still be reported if the depth is ≤ MIN_DEPTH");
+						+ " will still be reported if the depth ≤ --min-depth");
 
 		svcOptions
 				.addArgument("-d", "--min-depth")
@@ -100,22 +105,25 @@ public class DarkRegionFinderEngine {
 				.metavar("MIN_DEPTH")
 				.setDefault(5)
 				.type(Integer.class)
-				.help("The depth (≤) at which a region is considered 'dark' (i.e.,"
-						+ " it's not deep enough to reliably call heterozygous"
-						+ " mutations in the organism). Regions where"
-						+ " DEPTH ≤ DARK_DEPTH, will be reported regardless of MAPQ mass");
+				.help("The depth (≤) at which a region is always considered"
+						+ " 'dark'. The default value is meant to be a stringent"
+						+ " cutoff to identify regions where were very few reads"
+						+ " align (i.e., they're simply missing). Regions where"
+						+ " depth ≤ --min-depth will be reported regardless of MAPQ mass");
 
 		svcOptions
                 .addArgument("-e","--region-exclusivity")
                 .dest("EXCLUSIVE")
                 .metavar("EXCLUSIVE")
-                .setDefault(true)
-                .choices(0, 1)
+                .action(Arguments.storeTrue())
                 .type(Boolean.class)
-                .help("Whether to treat regions as exclusive or not. If EXCLUSIVE == true, a locus"
-                        + "will either be dark by low coverage or dark by poor MapQ NOT both. "
-                        + "If Exclusive == false, a locus can be in both regions if it meets the " +
-                        "≤ --min-depth and ≥ --min-mapq-mass thresholds");
+                .help("Whether to treat regions as exclusive or not. If present, a locus"
+                        + " will either be dark by low coverage or dark by low MAPQ"
+                        + " (set by --mapq-threshold), but NOT both. In this case,"
+                        + " the locus will be considered dark by low coverage."
+                        + " Otherwise, a locus can be in both categories if"
+                        + " depth ≤ --min-depth and MAPQ mass ≥ --min-mapq-mass"
+                        + " thresholds");
 
 		svcOptions
 				.addArgument("-v", "--validation-stringency")
@@ -155,12 +163,13 @@ public class DarkRegionFinderEngine {
 						+ " regions are those where depth ≤ --min_depth");
 
 		ioOptions
-				.addArgument("-a", "--poor-mapq-bed-output")
-				.dest("POOR_MAPQ_BED")
+				.addArgument("-a", "--low-mapq-bed-output")
+				.dest("LOW_MAPQ_BED")
 				.type(String.class)
-				.setDefault("poor_mapq.dark.bed")
-				.help("The output BED file for poor MapQ dark regions. Poor MapQ regions are"
-						+ " those with poor mapping quality ( mass of reads with mapq ≤ --mapq_threshold ≥ --min_mapq_mass).");
+				.setDefault("low_mapq.dark.bed")
+				.help("The output BED file for low MAPQ dark regions. Low MAPQ regions are"
+						+ " those with low mapping quality (loci with"
+						+ " MAPQ ≤ --mapq_threshold and MAPQ mass ≥ --min_mapq_mass).");
 
 		ioOptions
 				.addArgument("-n", "--incomplete-bed-output")
@@ -187,7 +196,7 @@ public class DarkRegionFinderEngine {
 		
 		String sam = parsedArgs.getString("SAM");
 		String lowDepthBed = parsedArgs.getString("LOW_COV_BED");
-		String poorMapQBed = parsedArgs.getString("POOR_MAPQ_BED");
+		String lowMapQBed = parsedArgs.getString("LOW_MAPQ_BED");
 		String incBed = parsedArgs.getString("INC_BED");
 		String hgRef = parsedArgs.getString("HG_REF");
 
@@ -213,7 +222,7 @@ public class DarkRegionFinderEngine {
 		try {
 			// Do your thing.
 			DarkRegionFinder cgf = new DarkRegionFinder(new File(sam),
-					new File(lowDepthBed), new File(poorMapQBed), new File(incBed),
+					new File(lowDepthBed), new File(lowMapQBed), new File(incBed),
 					new File(hgRef), mapQThresh, minMapQMass, minRegionSize, minDepth,
                     exclusive, vs);
 

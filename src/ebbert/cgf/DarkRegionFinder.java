@@ -39,7 +39,7 @@ public class DarkRegionFinder {
 	private static boolean EXCLUSIVE_REGIONS;
 	private static ValidationStringency SAM_VALIDATION_STRINGENCY;
 	
-	BufferedWriter poorMapQWriter, lowDepthWriter, incWriter;
+	BufferedWriter lowMapQWriter, lowDepthWriter, incWriter;
 
 	private SAMFileHeader header;
 	private SamReader reader;
@@ -70,9 +70,9 @@ public class DarkRegionFinder {
 //		this.startWalking = startWalking;
 //		this.endWalking = endWalking;
 		
-		poorMapQWriter = new BufferedWriter(new OutputStreamWriter(
+		lowMapQWriter = new BufferedWriter(new OutputStreamWriter(
 	              new FileOutputStream(outDepthBed), "utf-8"));
-		poorMapQWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
+		lowMapQWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
 
 		lowDepthWriter = new BufferedWriter(new OutputStreamWriter(
 	              new FileOutputStream(outMapQBed), "utf-8"));
@@ -123,10 +123,10 @@ public class DarkRegionFinder {
 		/* Walk along genome identifying 'dark' and 'camouflaged' regions */
 
 		LocusInfo locus;
-		int consecLowDepth = 0, consecPoorMapQ = 0, consecInc = 0, pos,
+		int consecLowDepth = 0, consecLowMapQ = 0, consecInc = 0, pos,
 				nMapQBelowThreshold, mapq;
 		ArrayList<String> lowDepthRegion = new ArrayList<String>(),
-				poorMapQRegion = new ArrayList<String>(),
+				lowMapQRegion = new ArrayList<String>(),
 				incRegion = new ArrayList<String>();
 		HashSet<String> ignore = new HashSet<String>();
 		String contig; byte[] bases; byte base;
@@ -137,7 +137,6 @@ public class DarkRegionFinder {
 		while(sli.hasNext()){
 
 		    /* write out and clear regions if the arrays are getting too big (in order to save memory)
-		       assuming MAX_ARRAY_SIZE > MIN_REGION_SIZE so we don't need to check consecPoorMapQ before printing
 		     */
 		    if ( consecInc > DarkRegionFinder.MIN_REGION_SIZE && incRegion.size() > DarkRegionFinder.MAX_ARRAY_SIZE) {
 		        writeRegion(incRegion, incWriter);
@@ -147,16 +146,18 @@ public class DarkRegionFinder {
                 writeRegion(lowDepthRegion, lowDepthWriter);
                 lowDepthRegion.clear();
             }
-            if ( consecPoorMapQ > DarkRegionFinder.MIN_REGION_SIZE && poorMapQRegion.size() > DarkRegionFinder.MAX_ARRAY_SIZE) {
-                writeRegion(poorMapQRegion, poorMapQWriter);
-                poorMapQRegion.clear();
+            if ( consecLowMapQ > DarkRegionFinder.MIN_REGION_SIZE && lowMapQRegion.size() > DarkRegionFinder.MAX_ARRAY_SIZE) {
+                writeRegion(lowMapQRegion, lowMapQWriter);
+                lowMapQRegion.clear();
             }
 
 			locus = sli.next();
 			
 			contig = locus.getSequenceName();
 			
-			/* If this contig is not in the ref, then skip */
+			/* If this contig is not in the ref, then skip. There's probably
+			 * a way to skip an entire contig. A good to-do.
+			 */
 			if(ignore.contains(contig)) {
 				continue;
 			}
@@ -190,17 +191,17 @@ public class DarkRegionFinder {
 				incRegion.add(incompleteRegionToString(contig, pos));
 				consecInc++;
 
-				/* Write dark and camo regions if large enough */
+				/* Write dark regions if large enough */
 				if(consecLowDepth >= DarkRegionFinder.MIN_REGION_SIZE){
 					writeRegion(lowDepthRegion, lowDepthWriter);
 				}
-				if(consecPoorMapQ >= DarkRegionFinder.MIN_REGION_SIZE){
-					writeRegion(poorMapQRegion, poorMapQWriter);
+				if(consecLowMapQ >= DarkRegionFinder.MIN_REGION_SIZE){
+					writeRegion(lowMapQRegion, lowMapQWriter);
 				}
 
 				/* Clear regardless (i.e., even if the region wasn't large enough) */
-				poorMapQRegion.clear();
-				consecPoorMapQ = 0;
+				lowMapQRegion.clear();
+				consecLowMapQ = 0;
 				lowDepthRegion.clear();
 				consecLowDepth = 0;
 
@@ -264,37 +265,37 @@ public class DarkRegionFinder {
 
 
             /* check if Exclusive and already in dark:
-             * if Exclusive is true and locus was already in low_depth, cannot be poor mapQ so write out poor MapQ and clear
-             * else if not exclusive or not low_depth check if it is a poor MapQ region
+             * if Exclusive is true and locus was already in low_depth, cannot be low mapQ so write out low MapQ and clear
+             * else if not exclusive or not low_depth check if it is a low MapQ region
              */
             if (DarkRegionFinder.EXCLUSIVE_REGIONS && low_depth ) {
 
-                /* print out poorMapQ Region if long enough */
-                if ( consecPoorMapQ > DarkRegionFinder.MIN_REGION_SIZE) {
-                    writeRegion(poorMapQRegion, poorMapQWriter);
+                /* print out lowMapQ Region if long enough */
+                if ( consecLowMapQ > DarkRegionFinder.MIN_REGION_SIZE) {
+                    writeRegion(lowMapQRegion, lowMapQWriter);
                 }
 
-                /* clear poorMapQ Region buffer regardless of length */
-                poorMapQRegion.clear();
-                consecPoorMapQ = 0;
+                /* clear lowMapQ Region buffer regardless of length */
+                lowMapQRegion.clear();
+                consecLowMapQ = 0;
             }
             else if ( percMapQBelowThreshold >= DarkRegionFinder.MIN_MAPQ_MASS) {
 
-                /* Save poorMapQ 'dark' region which has at mass > MIN_MAPQ_MASS of reads with mapq < MAPQ_THRESHOLD */
-                poorMapQRegion.add(poorMapQRegionToString(contig, pos,
+                /* Save lowMapQ 'dark' region which has at mass > MIN_MAPQ_MASS of reads with mapq < MAPQ_THRESHOLD */
+                lowMapQRegion.add(lowMapQRegionToString(contig, pos,
                         nMapQBelowThreshold, depth, percMapQBelowThreshold));
-                consecPoorMapQ++;
+                consecLowMapQ++;
 
             }
-            else if ( consecPoorMapQ > DarkRegionFinder.MIN_REGION_SIZE ) {
-                /* write out and clear poorMapQ region since it is long enough */
-                writeRegion(poorMapQRegion, poorMapQWriter);
-                poorMapQRegion.clear();
-                consecPoorMapQ = 0;
+            else if ( consecLowMapQ > DarkRegionFinder.MIN_REGION_SIZE ) {
+                /* write out and clear lowMapQ region since it is long enough */
+                writeRegion(lowMapQRegion, lowMapQWriter);
+                lowMapQRegion.clear();
+                consecLowMapQ = 0;
             }
             else {
-                poorMapQRegion.clear();
-                consecPoorMapQ = 0;
+                lowMapQRegion.clear();
+                consecLowMapQ = 0;
             }
 
 		}
@@ -303,15 +304,15 @@ public class DarkRegionFinder {
         if(consecLowDepth >= DarkRegionFinder.MIN_REGION_SIZE){
             writeRegion(lowDepthRegion, lowDepthWriter);
         }
-		if(consecPoorMapQ >= DarkRegionFinder.MIN_REGION_SIZE) {
-			writeRegion(poorMapQRegion, poorMapQWriter);
+		if(consecLowMapQ >= DarkRegionFinder.MIN_REGION_SIZE) {
+			writeRegion(lowMapQRegion, lowMapQWriter);
 		}
 		if(consecInc >= DarkRegionFinder.MIN_REGION_SIZE) {
 			writeRegion(incRegion, incWriter);
 		}
 
 		lowDepthWriter.close();
-		poorMapQWriter.close();
+		lowMapQWriter.close();
 		incWriter.close();
 		sli.close();
 	}
@@ -364,7 +365,7 @@ public class DarkRegionFinder {
      * @param percentMapQBelowThreshold
      * @return
      */
-	private String poorMapQRegionToString(String contigName, int position,
+	private String lowMapQRegionToString(String contigName, int position,
 			int nMapQBelowThreshold, double depth,
 			double percentMapQBelowThreshold) {
 
@@ -380,13 +381,13 @@ public class DarkRegionFinder {
 	}
 	
 	/**
-	 * @param poorMapQRegions
+	 * @param lowMapQRegions
 	 * @param writer
 	 * @throws IOException
 	 */
-	private void writeRegion(ArrayList<String> poorMapQRegions,
+	private void writeRegion(ArrayList<String> lowMapQRegions,
 			BufferedWriter writer) throws IOException {
-		for(String s : poorMapQRegions){
+		for(String s : lowMapQRegions){
 			writer.write(s);
 		}
 	}
