@@ -250,18 +250,23 @@ public class DarkRegionFinder {
                         depth, percMapQBelowThreshold));
                 consecLowDepth++;
             }
-            else if ( consecPoorMapQ > DarkRegionFinder.MIN_REGION_SIZE ) {
-                writeRegion(poorMapQRegion, poorMapQWriter);
+            else if ( consecLowDepth > DarkRegionFinder.MIN_REGION_SIZE ) {
+                /* write dark region then clear */
+                writeRegion(lowDepthRegion, lowDepthWriter);
 
-                poorMapQRegion.clear();
-                consecPoorMapQ = 0;
+                lowDepthRegion.clear();
+                consecLowDepth = 0;
             }
             else {
-                poorMapQRegion.clear();
-                consecPoorMapQ = 0;
+                lowDepthRegion.clear();
+                consecLowDepth = 0;
             }
 
 
+            /* check if Exclusive and already in dark:
+             * if Exclusive is true and locus was already in low_depth, cannot be poor mapQ so write out poor MapQ and clear
+             * else if not exclusive or not low_depth check if it is a poor MapQ region
+             */
             if (DarkRegionFinder.EXCLUSIVE_REGIONS && low_depth ) {
 
                 /* print out poorMapQ Region if long enough */
@@ -282,6 +287,7 @@ public class DarkRegionFinder {
 
             }
             else if ( consecPoorMapQ > DarkRegionFinder.MIN_REGION_SIZE ) {
+                /* write out and clear poorMapQ region since it is long enough */
                 writeRegion(poorMapQRegion, poorMapQWriter);
                 poorMapQRegion.clear();
                 consecPoorMapQ = 0;
