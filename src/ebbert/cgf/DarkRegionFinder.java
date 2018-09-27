@@ -70,13 +70,13 @@ public class DarkRegionFinder {
 //		this.startWalking = startWalking;
 //		this.endWalking = endWalking;
 		
-		lowMapQWriter = new BufferedWriter(new OutputStreamWriter(
-	              new FileOutputStream(outDepthBed), "utf-8"));
-		lowMapQWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
-
 		lowDepthWriter = new BufferedWriter(new OutputStreamWriter(
-	              new FileOutputStream(outMapQBed), "utf-8"));
+	              new FileOutputStream(outDepthBed), "utf-8"));
 		lowDepthWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
+
+		lowMapQWriter = new BufferedWriter(new OutputStreamWriter(
+	              new FileOutputStream(outMapQBed), "utf-8"));
+		lowMapQWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
 
 		incWriter = new BufferedWriter(new OutputStreamWriter(
 	              new FileOutputStream(outIncBed), "utf-8"));
