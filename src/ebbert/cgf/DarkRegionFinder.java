@@ -30,7 +30,7 @@ import htsjdk.samtools.util.SamLocusIterator.RecordAndOffset;
  * @author markebbert
  *
  */
-public class DarkRegionFinder {
+public class DarkRegionFinder implements IDarkRegionFinder {
 	
 	private static Logger logger = Logger.getLogger(DarkRegionFinder.class);
 	private static int MAPQ_THRESHOLD, MIN_DEPTH,
@@ -69,7 +69,7 @@ public class DarkRegionFinder {
 		// Would be nice to be able to specify start/end locations
 //		this.startWalking = startWalking;
 //		this.endWalking = endWalking;
-		
+
 		lowDepthWriter = new BufferedWriter(new OutputStreamWriter(
 	              new FileOutputStream(outDepthBed), "utf-8"));
 		lowDepthWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
@@ -82,18 +82,20 @@ public class DarkRegionFinder {
 	              new FileOutputStream(outIncBed), "utf-8"));
 		incWriter.write("chrom\tstart\tend\n");
 
+
 		DarkRegionFinder.MAPQ_THRESHOLD = mapQThreshold;
 		DarkRegionFinder.MIN_REGION_SIZE = minRegionSize;
 		DarkRegionFinder.MIN_DEPTH = minDepth;
 		DarkRegionFinder.MIN_MAPQ_MASS = minMapQMass;
 		DarkRegionFinder.EXCLUSIVE_REGIONS = exclusiveRegions;
 		DarkRegionFinder.SAM_VALIDATION_STRINGENCY = vs;
-		
+
 		this.hgRefReader = new IndexedFastaSequenceFile(hgRef);
 
 		this.reader = DarkRegionFinder.openSam(samFile,
 				DarkRegionFinder.SAM_VALIDATION_STRINGENCY);
 		this.header = reader.getFileHeader();
+
 		
 		/* Get sample name(s) from the sam/bam file */
         TreeSet<String> samples = new TreeSet<String>();
@@ -104,13 +106,13 @@ public class DarkRegionFinder {
 
 
 	/**
-	 * @throws Exception 
+ 	 * @throws Exception
 	 */
 	public void startWalkingByLocus() throws Exception{
 
 		SamLocusIterator sli = new SamLocusIterator(reader);
-		
-		/* Set the base quality score cutoff to 0 
+
+		/* Set the base quality score cutoff to 0
 		 * so the iterator won't try to validate base qualities. Any
 		 * secondary alignment won't have the qualities, and they're
 		 * all made up anyway.
@@ -163,16 +165,16 @@ public class DarkRegionFinder {
 			}
 
 			/* Returns 1-based position */
-			pos = locus.getPosition();  
-			
-			/* Ensure sequence is present in provided reference */
+			pos = locus.getPosition();
+
+			/* Ensure sequence is present in provided reference
 			if(hgRefReader.getSequenceDictionary().getSequence(contig) == null){
 				logger.warn("BAM file contains alignments for " + contig
 						+ " but this sequence was not found in the provided"
 						+ " reference. Skipping.");
 				ignore.add(contig);
 				continue;
-			}
+			}*/
 
 			/* Expects 1-based position (inclusive to inclusive) */
 			bases = hgRefReader.getSubsequenceAt(contig, pos, pos).getBases();

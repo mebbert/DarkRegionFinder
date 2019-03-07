@@ -34,10 +34,10 @@ public class DarkRegionFinderEngine {
 	 */
 	public static void main(String[] args) {
 		BasicConfigurator.configure();
-		DarkRegionFinderEngine cgfe = new DarkRegionFinderEngine();
-		ArgumentParser parser = cgfe.init(args);
+		DarkRegionFinderEngine drfe = new DarkRegionFinderEngine();
+		ArgumentParser parser = drfe.init(args);
 
-		cgfe.findCamoGenes(parser, args);
+		drfe.findDarkGenes(parser, args);
 	}
 	
 	/**
@@ -135,7 +135,23 @@ public class DarkRegionFinderEngine {
 						+ " file. 'STRICT' will throw errors if something "
 						+ " is amiss, 'LENIENT' will give warnings but continue,"
 						+ " and 'SILENT' will continue AND keep our mouth shut.");
-			
+
+		svcOptions
+				.addArgument("-j", "--threads")
+				.dest("THREADS")
+				.type(Integer.class)
+				.setDefault(1)
+				.help("Number of threads to use for multithreaded parallelism. Default is 1 thread, i.e. no parallelism.");
+
+		svcOptions
+				.addArgument("-k", "--tmp-dir")
+				.dest("TMPDIR")
+				.type(String.class)
+				.setDefault("./")
+				.help("Where to write temporary files created during computation."
+						+ " Temporary files are only created if parallelism is enabled (i.e. --threads ≥ 2)"
+						+ " Defaults to current working directory.");
+
 		/* Setup IO options */
 		ioOptions
 				.addArgument("-i", "--input")
@@ -179,12 +195,12 @@ public class DarkRegionFinderEngine {
 				.help("The output BED file for incomplete regions. Incomplete"
 						+ " regions are those where the bases are unknown"
 						+ " (i.e., 'N' or 'n').");
-		
+
 
 		return parser;
 
 	}
-	public void findCamoGenes(ArgumentParser parser, String[] args){
+	public void findDarkGenes(ArgumentParser parser, String[] args){
 
 		Namespace parsedArgs = null;
 		try{
@@ -206,6 +222,8 @@ public class DarkRegionFinderEngine {
 		int mapQThresh = parsedArgs.getInt("MAPQ_THRESHOLD");
 		boolean exclusive = parsedArgs.getBoolean("EXCLUSIVE");
 		String stringency = parsedArgs.getString("STRINGENCY");
+		String tmpdir = parsedArgs.getString("TMPDIR");
+		int threads = parsedArgs.getInt("THREADS");
 //		boolean ignoreLowCovRegions = parsedArgs.getBoolean("IGNORE_LOW_COV");
 		ValidationStringency vs = null;
 		
@@ -221,12 +239,21 @@ public class DarkRegionFinderEngine {
 		
 		try {
 			// Do your thing.
-			DarkRegionFinder cgf = new DarkRegionFinder(new File(sam),
-					new File(lowDepthBed), new File(lowMapQBed), new File(incBed),
-					new File(hgRef), mapQThresh, minMapQMass, minRegionSize, minDepth,
-                    exclusive, vs);
 
-			cgf.startWalkingByLocus();
+			IDarkRegionFinder drf = null;
+			if (threads == 1) {
+				drf = new DarkRegionFinder(new File(sam),
+						new File(lowDepthBed), new File(lowMapQBed), new File(incBed),
+						new File(hgRef), mapQThresh, minMapQMass, minRegionSize, minDepth,
+						exclusive, vs);
+			} else if (threads > 1) {
+				drf = new ThreadedDarkRegionFinder(new File(sam),
+						new File(lowDepthBed), new File(lowMapQBed), new File(incBed),
+						new File(hgRef), mapQThresh, minMapQMass, minRegionSize, minDepth,
+						exclusive, vs, tmpdir, threads);
+			}
+
+			drf.startWalkingByLocus();
 
 		} catch (FileNotFoundException e) {
 			DarkRegionFinderEngine.printErrorUsageHelpAndExit(parser, logger, e);
