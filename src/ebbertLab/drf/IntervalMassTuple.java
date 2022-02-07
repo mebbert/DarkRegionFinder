@@ -1,7 +1,7 @@
 /**
  * 
  */
-package ebbert.cgf;
+package ebbertLab.drf;
 
 import htsjdk.samtools.util.Interval;
 

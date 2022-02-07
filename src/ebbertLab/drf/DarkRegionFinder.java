@@ -1,7 +1,7 @@
 /**
  * 
  */
-package ebbert.cgf;
+package ebbertLab.drf;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -21,6 +21,8 @@ import htsjdk.samtools.SamReader;
 import htsjdk.samtools.SamReaderFactory;
 import htsjdk.samtools.ValidationStringency;
 import htsjdk.samtools.reference.IndexedFastaSequenceFile;
+import htsjdk.samtools.util.Interval;
+import htsjdk.samtools.util.IntervalList;
 import htsjdk.samtools.util.SamLocusIterator;
 import htsjdk.samtools.util.SamLocusIterator.LocusInfo;
 import htsjdk.samtools.util.SamLocusIterator.RecordAndOffset;
@@ -37,12 +39,12 @@ public class DarkRegionFinder {
 						MIN_REGION_SIZE, MIN_MAPQ_MASS,
                         MAX_ARRAY_SIZE = 10000;
 	private static boolean EXCLUSIVE_REGIONS;
-	private static ValidationStringency SAM_VALIDATION_STRINGENCY;
+	private static IntervalList intervalList;
 	
 	BufferedWriter lowMapQWriter, lowDepthWriter, incWriter;
 
 	private SAMFileHeader header;
-	private SamReader reader;
+	private SamReader samReader;
 	
 	private IndexedFastaSequenceFile hgRefReader;
 
@@ -64,7 +66,7 @@ public class DarkRegionFinder {
                         File outMapQBed, File outIncBed, File hgRef,
                         final int mapQThreshold, final int minMapQMass, final int minRegionSize,
                         int minDepth, final boolean exclusiveRegions, final ValidationStringency vs
-                    /*, int startWalking, int endWalking*/) throws IOException {
+                        , List<String> intervalStringList) throws IOException {
 		
 		// Would be nice to be able to specify start/end locations
 //		this.startWalking = startWalking;
@@ -87,13 +89,14 @@ public class DarkRegionFinder {
 		DarkRegionFinder.MIN_DEPTH = minDepth;
 		DarkRegionFinder.MIN_MAPQ_MASS = minMapQMass;
 		DarkRegionFinder.EXCLUSIVE_REGIONS = exclusiveRegions;
-		DarkRegionFinder.SAM_VALIDATION_STRINGENCY = vs;
 		
 		this.hgRefReader = new IndexedFastaSequenceFile(hgRef);
 
-		this.reader = DarkRegionFinder.openSam(samFile,
-				DarkRegionFinder.SAM_VALIDATION_STRINGENCY);
-		this.header = reader.getFileHeader();
+		this.samReader = DarkRegionFinder.openSam(samFile, vs);
+		this.header = samReader.getFileHeader();
+
+		DarkRegionFinder.intervalList = generateIntervalList(intervalStringList, header);
+
 		
 		/* Get sample name(s) from the sam/bam file */
         TreeSet<String> samples = new TreeSet<String>();
@@ -108,16 +111,27 @@ public class DarkRegionFinder {
 	 */
 	public void startWalkingByLocus() throws Exception{
 
-		SamLocusIterator sli = new SamLocusIterator(reader);
+		SamLocusIterator sli;
 		
-		/* Set the base quality score cutoff to 0 
+		/*
+		 * If the user specified an interval list, only read those intervals.
+		 * Otherwise, start from the beginning.
+		 */
+		if(DarkRegionFinder.intervalList.size() > 0) {
+			sli = new SamLocusIterator(samReader, DarkRegionFinder.intervalList);
+		}
+		else {
+			sli = new SamLocusIterator(samReader);
+		}
+		
+		/*
+		 * Set the base quality score cutoff to 0 
 		 * so the iterator won't try to validate base qualities. Any
 		 * secondary alignment won't have the qualities, and they're
 		 * all made up anyway.
 		 */
 		int baseQualityScoreCutoff = 0;
 		sli.setQualityScoreCutoff(baseQualityScoreCutoff);
-
 		
 		
 		/* Walk along genome identifying 'dark' and 'camouflaged' regions */
@@ -155,7 +169,8 @@ public class DarkRegionFinder {
 			
 			contig = locus.getSequenceName();
 			
-			/* If this contig is not in the ref, then skip. There's probably
+			/*
+			 * If this contig is not in the ref, then skip. There's probably
 			 * a way to skip an entire contig. A good to-do.
 			 */
 			if(ignore.contains(contig)) {
@@ -408,9 +423,40 @@ public class DarkRegionFinder {
 							  SamReaderFactory.Option.VALIDATE_CRC_CHECKSUMS)
 					  .validationStringency(vs);
 
-		final SamReader reader = factory.open(samFile);
+		final SamReader samReader = factory.open(samFile);
 		
-		 return reader;
+		 return samReader;
 	 }
+	 
+		
+	/**
+	 * 
+	 * Convert the List<String> of intervals to an IntervalList of Interval objects
+	 * 
+	 * @param intervalStringList
+	 * @param header
+	 * @return
+	 */
+	private static IntervalList generateIntervalList(List<String> intervalStringList, SAMFileHeader header) {
+
+		IntervalList intervalList = new IntervalList(header);
+		String contig, range;
+		int start, end;
+		String[] toks, rangeToks;
+		for(String interval : intervalStringList) {
+			toks = interval.split(":");
+			contig = toks[0];
+			range = toks[1];
+			
+			rangeToks = range.split("-");
+			
+			start = Integer.parseInt(rangeToks[0]);
+			end= Integer.parseInt(rangeToks[0]);
+			
+			intervalList.add(new Interval(contig, start, end));
+		}
+		
+		return intervalList;
+	}
     
 }

@@ -1,10 +1,11 @@
 /**
  * 
  */
-package ebbert.cgf;
+package ebbertLab.drf;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.util.List;
 
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Logger;
@@ -61,11 +62,11 @@ public class DarkRegionFinderEngine {
 				+ " incomplete are not included as a dark region, and vice-versa).");
 		parser.defaultHelp(true);
 		
-		ArgumentGroup svcOptions = parser.addArgumentGroup("Dark Region Finder arguments");
+		ArgumentGroup drfOptions = parser.addArgumentGroup("Dark Region Finder arguments");
 		ArgumentGroup ioOptions = parser.addArgumentGroup("input/output arguments");
 			
 		/* Setup SVC options */
-		svcOptions
+		drfOptions
 				.addArgument("-s", "--min-region-size")
 				.dest("MIN_SIZE")
 				.metavar("SIZE")
@@ -76,7 +77,7 @@ public class DarkRegionFinderEngine {
 						+ " only for regions that meet this size requirement."
 						+ " Regions can be merged using bedtools, if desired.");
 
-		svcOptions
+		drfOptions
 				.addArgument("-t", "--mapq-threshold")
 				.dest("MAPQ_THRESHOLD")
 				.metavar("THRESH")
@@ -88,7 +89,7 @@ public class DarkRegionFinderEngine {
 						+ " as this is the default MAPQ cut off used by GATK"
 						+ " when filtering reads");
 
-		svcOptions
+		drfOptions
 				.addArgument("-m", "--min-mapq-mass")
 				.dest("MIN_MAPQ_MASS")
 				.metavar("MAPQ_MASS")
@@ -99,7 +100,7 @@ public class DarkRegionFinderEngine {
 						+ " Dark loci where the percentage is below this threshold"
 						+ " will still be reported if the depth ≤ --min-depth");
 
-		svcOptions
+		drfOptions
 				.addArgument("-d", "--min-depth")
 				.dest("MIN_DEPTH")
 				.metavar("MIN_DEPTH")
@@ -111,7 +112,7 @@ public class DarkRegionFinderEngine {
 						+ " align (i.e., they're simply missing). Regions where"
 						+ " depth ≤ --min-depth will be reported regardless of MAPQ mass");
 
-		svcOptions
+		drfOptions
                 .addArgument("-e","--region-exclusivity")
                 .dest("EXCLUSIVE")
                 .metavar("EXCLUSIVE")
@@ -125,7 +126,7 @@ public class DarkRegionFinderEngine {
                         + " depth ≤ --min-depth and MAPQ mass ≥ --min-mapq-mass"
                         + " thresholds");
 
-		svcOptions
+		drfOptions
 				.addArgument("-v", "--validation-stringency")
 				.dest("STRINGENCY")
 				.setDefault("STRICT")
@@ -180,10 +181,19 @@ public class DarkRegionFinderEngine {
 						+ " regions are those where the bases are unknown"
 						+ " (i.e., 'N' or 'n').");
 		
+		ioOptions
+				.addArgument("-L", "--interval-list")
+				.dest("INTERVAL_LIST")
+				.type(List.class)
+				.nargs("+")
+				.help("");
+		
 
 		return parser;
 
 	}
+	
+	
 	public void findCamoGenes(ArgumentParser parser, String[] args){
 
 		Namespace parsedArgs = null;
@@ -206,7 +216,8 @@ public class DarkRegionFinderEngine {
 		int mapQThresh = parsedArgs.getInt("MAPQ_THRESHOLD");
 		boolean exclusive = parsedArgs.getBoolean("EXCLUSIVE");
 		String stringency = parsedArgs.getString("STRINGENCY");
-//		boolean ignoreLowCovRegions = parsedArgs.getBoolean("IGNORE_LOW_COV");
+		
+		List<String> intervalStringList = parsedArgs.getList("INTERVAL_LIST");
 		ValidationStringency vs = null;
 		
 		if("strict".equalsIgnoreCase(stringency)){
@@ -224,7 +235,7 @@ public class DarkRegionFinderEngine {
 			DarkRegionFinder cgf = new DarkRegionFinder(new File(sam),
 					new File(lowDepthBed), new File(lowMapQBed), new File(incBed),
 					new File(hgRef), mapQThresh, minMapQMass, minRegionSize, minDepth,
-                    exclusive, vs);
+                    exclusive, vs, intervalStringList);
 
 			cgf.startWalkingByLocus();
 
@@ -235,6 +246,7 @@ public class DarkRegionFinderEngine {
 			e.printStackTrace();
 		}
 	}
+
 	
 	/**
 	 * Print the error. Then print the usage and help
