@@ -1,7 +1,7 @@
 /**
  * 
  */
-package ebbert.cgf;
+package ebbertLab.drf;
 
 import java.io.BufferedWriter;
 import java.io.File;

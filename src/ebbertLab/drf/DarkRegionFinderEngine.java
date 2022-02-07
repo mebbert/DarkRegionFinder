@@ -1,7 +1,7 @@
 /**
  * 
  */
-package ebbert.cgf;
+package ebbertLab.drf;
 
 import java.io.File;
 import java.io.FileNotFoundException;
