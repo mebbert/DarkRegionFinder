@@ -118,7 +118,7 @@ public class DarkRegionFinder {
 		 * Otherwise, start from the beginning.
 		 */
 		if(DarkRegionFinder.intervalList.size() > 0) {
-			sli = new SamLocusIterator(samReader, DarkRegionFinder.intervalList);
+			sli = new SamLocusIterator(samReader, DarkRegionFinder.intervalList, true);
 		}
 		else {
 			sli = new SamLocusIterator(samReader);
