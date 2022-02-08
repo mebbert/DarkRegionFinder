@@ -206,8 +206,8 @@ public class DarkRegionFinder {
 			bases = hgRefReader.getSubsequenceAt(contig, pos, pos).getBases();
 
 			/* Track progress */ 
-        	if(nLociAssessed % 1000000 == 0){
-        		logger.debug("Assessed " + pos + " loci on " + contig);
+        	if(nLociAssessed > 0 && nLociAssessed % 1000000 == 0){
+        		logger.debug("Assessed " + nLociAssessed + " loci on " + contig);
         	}		
 
 

@@ -353,22 +353,34 @@ public class DarkRegionFinderEngine {
 		String[] incFileAndExtension = DarkRegionFinderEngine.getFileAndExtension(incBed);
 			
 		int saltLength = 5;
-		String saltString;
+		String saltString, devNull = "/dev/null";
 		File lowDepthBedFile, lowMapQBedFile, incBedFile;
 		while(true) {
 			saltString = DarkRegionFinderEngine.getSaltString(saltLength);
 			
-			lowDepthBedFile = new File(lowDepthFileAndExtension[0] + ".salt_" + saltString + lowDepthFileAndExtension[1]);
-			lowMapQBedFile = new File(lowMAPQFileAndExtension[0] + ".salt_" + saltString + lowMAPQFileAndExtension[1]);
-			incBedFile = new File(incFileAndExtension[0] + ".salt_" + saltString + incFileAndExtension[1]);
+
+			lowDepthBedFile = lowDepthBed.startsWith(devNull) ?
+					new File(lowDepthBed) :
+						new File(lowDepthFileAndExtension[0] + ".salt_"
+								+ saltString + lowDepthFileAndExtension[1]);
+
+			lowMapQBedFile = lowMapQBed.startsWith(devNull) ?
+					new File(lowMapQBed) :
+						new File(lowMAPQFileAndExtension[0] + ".salt_"
+								+ saltString + lowMAPQFileAndExtension[1]);
+
+			incBedFile = incBed.startsWith(devNull) ? 
+					new File(incBed) :
+						new File(incFileAndExtension[0] + ".salt_"
+								+ saltString + incFileAndExtension[1]);
 			
 			/*
 			 * Verify we haven't already created a file with this exact name,
 			 * including the salt string. If any of them exist, loop again.
 			 */
-			if(lowDepthBedFile.isFile() ||
-					lowMapQBedFile.isFile() ||
-					incBedFile.isFile()) {
+			if( (lowDepthBedFile.isFile() && !lowDepthBedFile.getAbsolutePath().startsWith(devNull)) ||
+					(lowMapQBedFile.isFile() && !lowMapQBedFile.getAbsolutePath().startsWith(devNull)) ||
+					(incBedFile.isFile() && !incBedFile.getAbsolutePath().startsWith(devNull)) ) {
 				continue;
 			}
 			
