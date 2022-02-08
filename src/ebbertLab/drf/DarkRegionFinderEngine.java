@@ -190,7 +190,8 @@ public class DarkRegionFinderEngine {
 				.nargs("+")
 				.help("Specific intervals to include. Intervals are 0-based and should"
 						+ " be formatted the same as samtools intervals (i.e.,"
-						+ " <contig_name>:<start>-<end>; e.g., chr1:207496157-207641765)."
+						+ " <contig_name>:<start>-<end>; e.g., chr1:207496157-207641765),"
+						+ " where <start> is inclusive while <end> is exclusive."
 						+ " The contig name should reflect what is used in the reference"
 						+ " genome the sample was aligned to (i.e., with or without 'chr',"
 						+ " etc.)."

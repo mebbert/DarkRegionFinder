@@ -151,7 +151,7 @@ public class DarkRegionFinder {
 
 		LocusInfo locus;
 		int consecLowDepth = 0, consecLowMapQ = 0, consecInc = 0, pos,
-				nMapQBelowThreshold, mapq;
+				nMapQBelowThreshold, mapq, nLociAssessed = 0;
 		ArrayList<String> lowDepthRegion = new ArrayList<String>(),
 				lowMapQRegion = new ArrayList<String>(),
 				incRegion = new ArrayList<String>();
@@ -206,7 +206,7 @@ public class DarkRegionFinder {
 			bases = hgRefReader.getSubsequenceAt(contig, pos, pos).getBases();
 
 			/* Track progress */ 
-        	if(pos % 1000000 == 0){
+        	if(nLociAssessed % 1000000 == 0){
         		logger.debug("Assessed " + pos + " loci on " + contig);
         	}		
 
@@ -325,7 +325,8 @@ public class DarkRegionFinder {
                 lowMapQRegion.clear();
                 consecLowMapQ = 0;
             }
-
+            
+            nLociAssessed++;
 		}
 		
 		/* Write regions if large enough */
