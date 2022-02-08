@@ -6,7 +6,6 @@ package ebbertLab.drf;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.List;
 import java.util.Random;
 
@@ -331,11 +330,16 @@ public class DarkRegionFinderEngine {
 	 * @return a salt string of length 'length'
 	 */
 	private static String getSaltString(int length) {
-        String SALTCHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+		
+		/*
+		 * Define possible salt characters. Included numbers twice to increase
+		 * their presence.
+		 */
+        String SALTCHARS = "a1bc2de3fg4hi5jk6lm7no8pq9rs0tuvwxyz1234567890";
         StringBuilder salt = new StringBuilder();
         Random rnd = new Random();
         while (salt.length() < length) { // length of the random string.
-            int index = (int) (rnd.nextInt() * SALTCHARS.length());
+            int index = rnd.nextInt(SALTCHARS.length());
             salt.append(SALTCHARS.charAt(index));
         }
         String saltStr = salt.toString();
@@ -353,9 +357,9 @@ public class DarkRegionFinderEngine {
 		while(true) {
 			saltString = DarkRegionFinderEngine.getSaltString(saltLength);
 			
-			lowDepthBedFile = new File(lowDepthFileAndExtension[0] + saltString + lowDepthFileAndExtension[1]);
-			lowMapQBedFile = new File(lowMAPQFileAndExtension[0] + saltString + lowMAPQFileAndExtension[1]);
-			incBedFile = new File(incFileAndExtension[0] + saltString + incFileAndExtension[1]);
+			lowDepthBedFile = new File(lowDepthFileAndExtension[0] + ".salt_" + saltString + lowDepthFileAndExtension[1]);
+			lowMapQBedFile = new File(lowMAPQFileAndExtension[0] + ".salt_" + saltString + lowMAPQFileAndExtension[1]);
+			incBedFile = new File(incFileAndExtension[0] + ".salt_" + saltString + incFileAndExtension[1]);
 			
 			/*
 			 * Verify we haven't already created a file with this exact name,
