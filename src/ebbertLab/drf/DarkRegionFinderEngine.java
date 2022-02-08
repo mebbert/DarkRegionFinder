@@ -5,7 +5,10 @@ package ebbertLab.drf;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
+import java.util.Random;
 
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Logger;
@@ -38,7 +41,7 @@ public class DarkRegionFinderEngine {
 		DarkRegionFinderEngine cgfe = new DarkRegionFinderEngine();
 		ArgumentParser parser = cgfe.init(args);
 
-		cgfe.findCamoGenes(parser, args);
+		cgfe.findDarkRegions(parser, args);
 	}
 	
 	/**
@@ -152,8 +155,8 @@ public class DarkRegionFinderEngine {
 				.type(String.class)
 				.required(true)
 				.help("The human genome reference file. Must also be indexed "
-						+ "by 'samtools faidx' and have a Picard sequence"
-						+ " dictionary.");
+						+ "by 'samtools faidx' and have a GATK/Picard sequence"
+						+ " dictionary (e.g., gatk CreateSequenceDictionary -R <ref.fa>).");
 
 		ioOptions
 				.addArgument("-c", "--low-coverage-bed-output")
@@ -184,9 +187,24 @@ public class DarkRegionFinderEngine {
 		ioOptions
 				.addArgument("-L", "--interval-list")
 				.dest("INTERVAL_LIST")
-				.type(List.class)
+				.type(String.class)
 				.nargs("+")
-				.help("");
+				.help("Specific intervals to include. Intervals are 0-based and should"
+						+ " be formatted the same as samtools intervals (i.e.,"
+						+ " <contig_name>:<start>-<end>; e.g., chr1:207496157-207641765)."
+						+ " The contig name should reflect what is used in the reference"
+						+ " genome the sample was aligned to (i.e., with or without 'chr',"
+						+ " etc.)."
+						+ "\n\nIf this argument is not provided, DRF will start at the"
+						+ " beginning of the genome (based on how the reference and bam are"
+						+ " sorted. This argument makes it possible to parallelize DRF by"
+						+ " submitting multiple jobs with different regions. We chose this"
+						+ " approach because it makes it easier to split jobs across nodes"
+						+ " in a computer cluster, rather than having a single job manage"
+						+ " all treads. The results will need to be combined for the sample."
+						+ " \n\nIf this argument is provided, DRF will add a random string to"
+						+ " the user-specified filenames to avoid multiple runs writing to the"
+						+ " same file.");
 		
 
 		return parser;
@@ -194,7 +212,7 @@ public class DarkRegionFinderEngine {
 	}
 	
 	
-	public void findCamoGenes(ArgumentParser parser, String[] args){
+	public void findDarkRegions(ArgumentParser parser, String[] args){
 
 		Namespace parsedArgs = null;
 		try{
@@ -204,11 +222,18 @@ public class DarkRegionFinderEngine {
 			System.exit(1);
 		}
 		
+		/*
+		 * Input files
+		 */
 		String sam = parsedArgs.getString("SAM");
+		String hgRef = parsedArgs.getString("HG_REF");
+
+		/*
+		 * Output files
+		 */
 		String lowDepthBed = parsedArgs.getString("LOW_COV_BED");
 		String lowMapQBed = parsedArgs.getString("LOW_MAPQ_BED");
 		String incBed = parsedArgs.getString("INC_BED");
-		String hgRef = parsedArgs.getString("HG_REF");
 
 		int minMapQMass = parsedArgs.getInt("MIN_MAPQ_MASS");
 		int minRegionSize = parsedArgs.getInt("MIN_SIZE");
@@ -217,7 +242,7 @@ public class DarkRegionFinderEngine {
 		boolean exclusive = parsedArgs.getBoolean("EXCLUSIVE");
 		String stringency = parsedArgs.getString("STRINGENCY");
 		
-		List<String> intervalStringList = parsedArgs.getList("INTERVAL_LIST");
+		List<String> intervalList = parsedArgs.getList("INTERVAL_LIST");
 		ValidationStringency vs = null;
 		
 		if("strict".equalsIgnoreCase(stringency)){
@@ -231,16 +256,36 @@ public class DarkRegionFinderEngine {
 		}
 		
 		try {
+			
+			File lowDepthBedFile = new File(lowDepthBed);
+			File lowMapQBedFile = new File (lowMapQBed);
+			File incBedFile = new File(incBed);
+			
+			/*
+			 * If an interval list is specified, append random string to output
+			 * file names.
+			 */
+			if(null != intervalList) {
+				
+				File[] newOutputFiles = DarkRegionFinderEngine.createUniqueOutputFileNames(lowDepthBed, lowMapQBed, incBed);
+				
+				lowDepthBedFile = newOutputFiles[0];
+				lowMapQBedFile = newOutputFiles[1];
+				incBedFile = newOutputFiles[2];
+			}
+			
 			// Do your thing.
 			DarkRegionFinder cgf = new DarkRegionFinder(new File(sam),
-					new File(lowDepthBed), new File(lowMapQBed), new File(incBed),
+					lowDepthBedFile, lowMapQBedFile, incBedFile,
 					new File(hgRef), mapQThresh, minMapQMass, minRegionSize, minDepth,
-                    exclusive, vs, intervalStringList);
+                    exclusive, vs, intervalList);
 
 			cgf.startWalkingByLocus();
 
 		} catch (FileNotFoundException e) {
 			DarkRegionFinderEngine.printErrorUsageHelpAndExit(parser, logger, e);
+		} catch (IOException e) {
+			DarkRegionFinderEngine.printErrorAndExit(e);
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -257,6 +302,7 @@ public class DarkRegionFinderEngine {
 		System.err.println("\nERROR: " + e.getMessage() + "\n");
 //		logger.error(e.getMessage());
 		DarkRegionFinderEngine.printUsageHelpAndExit(parser);
+		System.exit(1);		
 	}
 	
 	
@@ -267,6 +313,107 @@ public class DarkRegionFinderEngine {
 		parser.printUsage();
 		parser.printHelp();
 		System.exit(1);		
+	}
+	
+	private static void printErrorAndExit(Exception e){
+		System.err.println("\nERROR: " + e.getMessage() + "\n");
+		System.exit(1);		
+	}
+	
+	/**
+	 * Generate a random String to append to user-defined file names
+	 * when -L (--interval-list) is used to prevent multiple DRF instances
+	 * from writing to the same file.
+	 * 
+	 * Obtained from: https://stackoverflow.com/questions/20536566/creating-a-random-string-with-a-z-and-0-9-in-java
+	 * 
+	 * @param length: how long to make the random string
+	 * @return a salt string of length 'length'
+	 */
+	private static String getSaltString(int length) {
+        String SALTCHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+        StringBuilder salt = new StringBuilder();
+        Random rnd = new Random();
+        while (salt.length() < length) { // length of the random string.
+            int index = (int) (rnd.nextInt() * SALTCHARS.length());
+            salt.append(SALTCHARS.charAt(index));
+        }
+        String saltStr = salt.toString();
+        return saltStr;
+    }
+	
+	private static File[] createUniqueOutputFileNames(String lowDepthBed, String lowMapQBed, String incBed) throws IOException {
+		String[] lowDepthFileAndExtension = DarkRegionFinderEngine.getFileAndExtension(lowDepthBed);
+		String[] lowMAPQFileAndExtension = DarkRegionFinderEngine.getFileAndExtension(lowMapQBed);
+		String[] incFileAndExtension = DarkRegionFinderEngine.getFileAndExtension(incBed);
+			
+		int saltLength = 5;
+		String saltString;
+		File lowDepthBedFile, lowMapQBedFile, incBedFile;
+		while(true) {
+			saltString = DarkRegionFinderEngine.getSaltString(saltLength);
+			
+			lowDepthBedFile = new File(lowDepthFileAndExtension[0] + saltString + lowDepthFileAndExtension[1]);
+			lowMapQBedFile = new File(lowMAPQFileAndExtension[0] + saltString + lowMAPQFileAndExtension[1]);
+			incBedFile = new File(incFileAndExtension[0] + saltString + incFileAndExtension[1]);
+			
+			/*
+			 * Verify we haven't already created a file with this exact name,
+			 * including the salt string. If any of them exist, loop again.
+			 */
+			if(lowDepthBedFile.isFile() ||
+					lowMapQBedFile.isFile() ||
+					incBedFile.isFile()) {
+				continue;
+			}
+			
+			/*
+			 * We created a unique saltString for these files.
+			 */
+			break;
+		}
+		return new File[] {lowDepthBedFile, lowMapQBedFile, incBedFile};
+	}
+	
+	/**
+	 * Remove file extension from provided file string.
+	 * 
+	 * Obtained from (and modified): https://stackoverflow.com/questions/941272/how-do-i-trim-a-file-extension-from-a-string-in-java
+	 * 
+	 * @param fileString
+	 * @return
+	 * @throws IOException 
+	 */
+	private static String[] getFileAndExtension(String fileString) throws IOException {
+
+	    String separator = System.getProperty("file.separator");
+	    String filename;
+
+	    // Remove the path upto the filename.
+	    int lastSeparatorIndex = fileString.lastIndexOf(separator);
+	    if (lastSeparatorIndex == -1) {
+	        filename = fileString;
+	    } else {
+	        filename = fileString.substring(lastSeparatorIndex + 1);
+	    }
+	    
+	    /*
+	     * Catch case where user specifies a hidden file naem (beginning with '.'.
+	     */
+	    if(filename.startsWith(".")) {
+	    	throw new IOException("The provided file name is a hidden file"
+	    			+ " (starts with '.'). Please specify a non-hidden file"
+	    			+ " name.");
+	    }
+
+	    // Return filename without extension and extension in a String[]
+	    int extensionIndex = filename.lastIndexOf(".");
+	    if (extensionIndex == -1) {
+	        return new String[] {filename, ""};
+	    }
+
+	    return new String[] {filename.substring(0, extensionIndex),
+	    		filename.substring(extensionIndex)};
 	}
 
 }

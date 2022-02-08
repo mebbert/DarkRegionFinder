@@ -17,9 +17,11 @@ import org.apache.log4j.Logger;
 
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMReadGroupRecord;
+import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.SamReader;
 import htsjdk.samtools.SamReaderFactory;
 import htsjdk.samtools.ValidationStringency;
+import htsjdk.samtools.cram.ref.ReferenceSource;
 import htsjdk.samtools.reference.IndexedFastaSequenceFile;
 import htsjdk.samtools.util.Interval;
 import htsjdk.samtools.util.IntervalList;
@@ -47,6 +49,7 @@ public class DarkRegionFinder {
 	private SamReader samReader;
 	
 	private IndexedFastaSequenceFile hgRefReader;
+	private SAMSequenceDictionary hgRefDictionary;
 
     /**
      *
@@ -61,6 +64,7 @@ public class DarkRegionFinder {
      * @param minDepth
      * @param vs
      * @throws IOException
+     * @throws ReferenceDictionaryNotFoundException 
      */
 	public DarkRegionFinder(final File samFile, final File outDepthBed,
                         File outMapQBed, File outIncBed, File hgRef,
@@ -68,10 +72,7 @@ public class DarkRegionFinder {
                         int minDepth, final boolean exclusiveRegions, final ValidationStringency vs
                         , List<String> intervalStringList) throws IOException {
 		
-		// Would be nice to be able to specify start/end locations
-//		this.startWalking = startWalking;
-//		this.endWalking = endWalking;
-		
+
 		lowDepthWriter = new BufferedWriter(new OutputStreamWriter(
 	              new FileOutputStream(outDepthBed), "utf-8"));
 		lowDepthWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
@@ -91,8 +92,16 @@ public class DarkRegionFinder {
 		DarkRegionFinder.EXCLUSIVE_REGIONS = exclusiveRegions;
 		
 		this.hgRefReader = new IndexedFastaSequenceFile(hgRef);
+		this.hgRefDictionary = hgRefReader.getSequenceDictionary();
+		
+		if(null == hgRefDictionary) {
+			String err = "The reference provided does not have a dictionary (.dict) file. Generate"
+					+ " the dictionary before proceeding.";
+			logger.error(err);
+			throw new IOException(err);
+		}
 
-		this.samReader = DarkRegionFinder.openSam(samFile, vs);
+		this.samReader = DarkRegionFinder.openSam(samFile, vs, hgRef);
 		this.header = samReader.getFileHeader();
 
 		DarkRegionFinder.intervalList = generateIntervalList(intervalStringList, header);
@@ -117,8 +126,12 @@ public class DarkRegionFinder {
 		 * If the user specified an interval list, only read those intervals.
 		 * Otherwise, start from the beginning.
 		 */
-		if(DarkRegionFinder.intervalList.size() > 0) {
+		if(null != DarkRegionFinder.intervalList && DarkRegionFinder.intervalList.size() > 0) {
 			sli = new SamLocusIterator(samReader, DarkRegionFinder.intervalList, true);
+			
+			for(Interval interval : intervalList) {
+				System.out.println("Interval: " + interval.toString());
+			}
 		}
 		else {
 			sli = new SamLocusIterator(samReader);
@@ -181,7 +194,7 @@ public class DarkRegionFinder {
 			pos = locus.getPosition();  
 			
 			/* Ensure sequence is present in provided reference */
-			if(hgRefReader.getSequenceDictionary().getSequence(contig) == null){
+			if(null == this.hgRefDictionary.getSequence(contig)){
 				logger.warn("BAM file contains alignments for " + contig
 						+ " but this sequence was not found in the provided"
 						+ " reference. Skipping.");
@@ -239,11 +252,11 @@ public class DarkRegionFinder {
 			low_depth = false;
 
 			/* Get depth at this position. */
-			depth = locus.getRecordAndPositions().size();
+			depth = locus.getRecordAndOffsets().size();
 
 			
 			/* Get number of reads with MAPQ ≤ threshold */
-			recs = locus.getRecordAndPositions();
+			recs = locus.getRecordAndOffsets();
 			nMapQBelowThreshold = 0;
 			for(RecordAndOffset rec : recs){
 				mapq = rec.getRecord().getMappingQuality();
@@ -415,17 +428,19 @@ public class DarkRegionFinder {
 	 * @param vs
 	 * @return SamReader
 	 */
-	 private static SamReader openSam(final File samFile, ValidationStringency vs) {
+	 private static SamReader openSam(final File samFile, ValidationStringency vs, File hgRef) {
 		 
 		final SamReaderFactory factory =
 				  SamReaderFactory.makeDefault()
 					  .enable(SamReaderFactory.Option.INCLUDE_SOURCE_IN_RECORDS,
 							  SamReaderFactory.Option.VALIDATE_CRC_CHECKSUMS)
-					  .validationStringency(vs);
+					  .validationStringency(vs)
+					  .referenceSource(new ReferenceSource(hgRef));
+		
 
 		final SamReader samReader = factory.open(samFile);
 		
-		 return samReader;
+		return samReader;
 	 }
 	 
 		
@@ -438,6 +453,10 @@ public class DarkRegionFinder {
 	 * @return
 	 */
 	private static IntervalList generateIntervalList(List<String> intervalStringList, SAMFileHeader header) {
+		
+		if(null == intervalStringList) {
+			return null;
+		}
 
 		IntervalList intervalList = new IntervalList(header);
 		String contig, range;
@@ -451,7 +470,7 @@ public class DarkRegionFinder {
 			rangeToks = range.split("-");
 			
 			start = Integer.parseInt(rangeToks[0]);
-			end= Integer.parseInt(rangeToks[0]);
+			end= Integer.parseInt(rangeToks[1]);
 			
 			intervalList.add(new Interval(contig, start, end));
 		}
