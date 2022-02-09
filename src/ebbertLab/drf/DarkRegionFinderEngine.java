@@ -257,6 +257,19 @@ public class DarkRegionFinderEngine {
 		
 		try {
 			
+			/*
+			 * DRF will write to .gz file. Add .gz to file names if not present.
+			 */
+			if(!lowDepthBed.startsWith("/dev/null")) {
+				lowDepthBed = lowDepthBed.endsWith(".gz") ? lowDepthBed : lowDepthBed + ".gz";
+			}
+			if(!lowMapQBed.startsWith("/dev/null")) {
+				lowMapQBed = lowMapQBed.endsWith(".gz") ? lowMapQBed : lowMapQBed + ".gz";
+			}
+			if(!incBed.startsWith("/dev/null")) {
+				incBed = incBed.endsWith(".gz") ? incBed : incBed + ".gz";
+			}
+			
 			File lowDepthBedFile = new File(lowDepthBed);
 			File lowMapQBedFile = new File (lowMapQBed);
 			File incBedFile = new File(incBed);

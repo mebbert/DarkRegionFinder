@@ -3,15 +3,16 @@
  */
 package ebbertLab.drf;
 
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.TreeSet;
+import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 
@@ -43,7 +44,7 @@ public class DarkRegionFinder {
 	private static boolean EXCLUSIVE_REGIONS;
 	private static IntervalList intervalList;
 	
-	BufferedWriter lowMapQWriter, lowDepthWriter, incWriter;
+	Writer lowMapQWriter, lowDepthWriter, incWriter;
 
 	private SAMFileHeader header;
 	private SamReader samReader;
@@ -73,16 +74,16 @@ public class DarkRegionFinder {
                         , List<String> intervalStringList) throws IOException {
 		
 
-		lowDepthWriter = new BufferedWriter(new OutputStreamWriter(
-	              new FileOutputStream(outDepthBed), "utf-8"));
+		lowDepthWriter = new OutputStreamWriter(new GZIPOutputStream(
+	              new FileOutputStream(outDepthBed)), "utf-8");
 		lowDepthWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
 
-		lowMapQWriter = new BufferedWriter(new OutputStreamWriter(
-	              new FileOutputStream(outMapQBed), "utf-8"));
+		lowMapQWriter = new OutputStreamWriter(new GZIPOutputStream(
+	              new FileOutputStream(outMapQBed)), "utf-8");
 		lowMapQWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
 
-		incWriter = new BufferedWriter(new OutputStreamWriter(
-	              new FileOutputStream(outIncBed), "utf-8"));
+		incWriter = new OutputStreamWriter(new GZIPOutputStream(
+	              new FileOutputStream(outIncBed)), "utf-8");
 		incWriter.write("chrom\tstart\tend\n");
 
 		DarkRegionFinder.MAPQ_THRESHOLD = mapQThreshold;
@@ -415,7 +416,7 @@ public class DarkRegionFinder {
 	 * @throws IOException
 	 */
 	private void writeRegion(ArrayList<String> lowMapQRegions,
-			BufferedWriter writer) throws IOException {
+			Writer writer) throws IOException {
 		for(String s : lowMapQRegions){
 			writer.write(s);
 		}
