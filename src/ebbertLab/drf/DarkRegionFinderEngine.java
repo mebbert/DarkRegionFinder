@@ -289,6 +289,7 @@ public class DarkRegionFinderEngine {
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+			System.exit(1);
 		}
 	}
 
@@ -404,13 +405,15 @@ public class DarkRegionFinderEngine {
 	private static String[] getFileAndExtension(String fileString) throws IOException {
 
 	    String separator = System.getProperty("file.separator");
-	    String filename;
+	    String path, filename;
 
 	    // Remove the path upto the filename.
 	    int lastSeparatorIndex = fileString.lastIndexOf(separator);
 	    if (lastSeparatorIndex == -1) {
+	    	path = "";
 	        filename = fileString;
 	    } else {
+	        path = fileString.substring(0, lastSeparatorIndex + 1);
 	        filename = fileString.substring(lastSeparatorIndex + 1);
 	    }
 	    
@@ -429,7 +432,7 @@ public class DarkRegionFinderEngine {
 	        return new String[] {filename, ""};
 	    }
 
-	    return new String[] {filename.substring(0, extensionIndex),
+	    return new String[] {path + filename.substring(0, extensionIndex),
 	    		filename.substring(extensionIndex)};
 	}
 
