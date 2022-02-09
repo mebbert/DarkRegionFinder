@@ -163,7 +163,8 @@ public class DarkRegionFinderEngine {
 				.type(String.class)
 				.setDefault("low_coverage.dark.bed")
 				.help("The output BED file for low-coverage dark regions. Low coverage dark"
-						+ " regions are those where depth ≤ --min_depth");
+						+ " regions are those where depth ≤ --min_depth. Columns for this file"
+						+ " are: chromosome, start, end, MapQBelowThreshold, depth, percMapQBelowThreshold");
 
 		ioOptions
 				.addArgument("-a", "--low-mapq-bed-output")
@@ -172,7 +173,9 @@ public class DarkRegionFinderEngine {
 				.setDefault("low_mapq.dark.bed")
 				.help("The output BED file for low MAPQ dark regions. Low MAPQ regions are"
 						+ " those with low mapping quality (loci with"
-						+ " MAPQ ≤ --mapq_threshold and MAPQ mass ≥ --min_mapq_mass).");
+						+ " MAPQ ≤ --mapq_threshold and MAPQ mass ≥ --min_mapq_mass)."
+						+ " Columns for this file are: chromosome, start, end, MapQBelowThreshold,"
+						+ "depth, percMapQBelowThreshold");
 
 		ioOptions
 				.addArgument("-n", "--incomplete-bed-output")
@@ -181,7 +184,7 @@ public class DarkRegionFinderEngine {
 				.setDefault("incomplete.bed")
 				.help("The output BED file for incomplete regions. Incomplete"
 						+ " regions are those where the bases are unknown"
-						+ " (i.e., 'N' or 'n').");
+						+ " (i.e., 'N' or 'n'). Columns for this file are: chromosome, start, end.");
 		
 		ioOptions
 				.addArgument("-L", "--interval-list")

@@ -76,15 +76,15 @@ public class DarkRegionFinder {
 
 		lowDepthWriter = new OutputStreamWriter(new GZIPOutputStream(
 	              new FileOutputStream(outDepthBed)), "utf-8");
-		lowDepthWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
+		// lowDepthWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
 
 		lowMapQWriter = new OutputStreamWriter(new GZIPOutputStream(
 	              new FileOutputStream(outMapQBed)), "utf-8");
-		lowMapQWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
+		// lowMapQWriter.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n");
 
 		incWriter = new OutputStreamWriter(new GZIPOutputStream(
 	              new FileOutputStream(outIncBed)), "utf-8");
-		incWriter.write("chrom\tstart\tend\n");
+		// incWriter.write("chrom\tstart\tend\n");
 
 		DarkRegionFinder.MAPQ_THRESHOLD = mapQThreshold;
 		DarkRegionFinder.MIN_REGION_SIZE = minRegionSize;
