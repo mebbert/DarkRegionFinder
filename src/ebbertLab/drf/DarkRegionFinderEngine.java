@@ -353,7 +353,7 @@ public class DarkRegionFinderEngine {
 		 * Define possible salt characters. Included numbers twice to increase
 		 * their presence.
 		 */
-        String SALTCHARS = "a1bc2de3fg4hi5jk6lm7no8pq9rs0tuvwxyz1234567890";
+        String SALTCHARS = "a1bc2de3fg4hi5jk6lm7no8pq9rs0tuvwxyz1234567890A1BC2DE3FG4HI5JK6LM7NO8PQ9RS0TUVWXYZ";
         StringBuilder salt = new StringBuilder();
         Random rnd = new Random();
         while (salt.length() < length) { // length of the random string.
@@ -369,7 +369,7 @@ public class DarkRegionFinderEngine {
 		String[] lowMAPQFileAndExtension = DarkRegionFinderEngine.getFileAndExtension(lowMapQBed);
 		String[] incFileAndExtension = DarkRegionFinderEngine.getFileAndExtension(incBed);
 			
-		int saltLength = 5;
+		int saltLength = 15;
 		String saltString, devNull = "/dev/null";
 		File lowDepthBedFile, lowMapQBedFile, incBedFile;
 		while(true) {
