@@ -191,13 +191,18 @@ public class DarkRegionFinderEngine {
 				.dest("INTERVAL_LIST")
 				.type(String.class)
 				.nargs("+")
-				.help("Specific intervals to include. Intervals are 0-based and should"
+				.help("Specific intervals to include. Intervals are 1-based and should"
 						+ " be formatted the same as samtools intervals (i.e.,"
 						+ " <contig_name>:<start>-<end>; e.g., chr1:207496157-207641765),"
 						+ " where <start> is inclusive while <end> is exclusive."
 						+ " The contig name should reflect what is used in the reference"
 						+ " genome the sample was aligned to (i.e., with or without 'chr',"
-						+ " etc.)."
+						+ " etc.). CAUTION: Providing intervals outside of boundries"
+						+ " (e.g., starting at position '0'; e.g., chr1:0-100000, instead of"
+						+ " chr1:1-100000) has created unpredictable behavior from the"
+						+ " htsjdk on certain systems (e.g., reporting"
+						+ " no depth at every position in the interval). We have not"
+						+ " determined the underlying issue."
 						+ "\n\nIf this argument is not provided, DRF will start at the"
 						+ " beginning of the genome (based on how the reference and bam are"
 						+ " sorted. This argument makes it possible to parallelize DRF by"
