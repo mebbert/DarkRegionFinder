@@ -462,12 +462,18 @@ public class DarkRegionFinder {
 
 		IntervalList intervalList = new IntervalList(header);
 		String contig, range;
-		int start, end;
-		String[] toks, rangeToks;
+		int start, end, lastColon;
+		String[] rangeToks;
 		for(String interval : intervalStringList) {
-			toks = interval.split(":");
-			contig = toks[0];
-			range = toks[1];
+			
+			/*
+			 * Some contigs contain colon ':' in the contig name
+			 * (e.g., 'HLA-A*01:01:01:02N:1-3291'), so we will get the last
+			 * index of ';'.
+			 */
+			lastColon = interval.lastIndexOf(':');
+			contig = interval.substring(0, lastColon);
+			range = interval.substring(lastColon + 1);
 			
 			rangeToks = range.split("-");
 			
