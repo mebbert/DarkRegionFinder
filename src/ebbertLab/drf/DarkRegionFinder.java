@@ -364,7 +364,9 @@ public class DarkRegionFinder {
 	}
 
     /**
-     *
+     * Create a string for this low-depth region for output in a .bed file. Will
+     * convert to 0-based positions since .bed files are 0-based.
+     * 
      * @param contigName
      * @param position
      * @param nMapQBelowThreshold
@@ -376,10 +378,12 @@ public class DarkRegionFinder {
 			int nMapQBelowThreshold, double depth, double percentMapQBelowThreshold) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
+		int posZeroBased = position - 1;
+
         StringBuilder sb = new StringBuilder();
         sb.append(contigName).append("\t")
-                .append(position - 1).append("\t")
-                .append(position).append("\t")
+                .append(posZeroBased).append("\t")
+                .append(posZeroBased).append("\t")
                 .append(nMapQBelowThreshold).append("\t")
                 .append((int) depth).append("\t")
                 .append(percentMapQBelowThreshold).append("\n");
