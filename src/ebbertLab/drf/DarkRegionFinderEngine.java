@@ -164,7 +164,11 @@ public class DarkRegionFinderEngine {
 				.setDefault("low_coverage.dark.bed")
 				.help("The output BED file for low-coverage dark regions. Low coverage dark"
 						+ " regions are those where depth ≤ --min_depth. Columns for this file"
-						+ " are: chromosome, start, end, MapQBelowThreshold, depth, percMapQBelowThreshold");
+						+ " are: (1) chromosome; (2) start; (3) end; (4) n reads with MapQBelowThreshold;"
+						+ " (5) percMapQBelowThreshold; (6) depth at position (reads with a deletion are NOT included);"
+						+ " (7) n reads where a deletion is reported (nDeletedInRecord);"
+						+ " (8) n reads overlapping position (total depth including reads with"
+						+ " a deletion at this postion; nOverlappingReads)");
 
 		ioOptions
 				.addArgument("-a", "--low-mapq-bed-output")
@@ -175,7 +179,7 @@ public class DarkRegionFinderEngine {
 						+ " those with low mapping quality (loci with"
 						+ " MAPQ ≤ --mapq_threshold and MAPQ mass ≥ --min_mapq_mass)."
 						+ " Columns for this file are: chromosome, start, end, MapQBelowThreshold,"
-						+ "depth, percMapQBelowThreshold");
+						+ " depth, percMapQBelowThreshold");
 
 		ioOptions
 				.addArgument("-n", "--incomplete-bed-output")
