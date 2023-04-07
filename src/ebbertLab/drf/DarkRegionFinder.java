@@ -164,7 +164,7 @@ public class DarkRegionFinder {
 		HashSet<String> ignore = new HashSet<String>();
 		String contig; byte[] bases; byte base;
 		List<RecordAndOffset> recs = null;
-		double percMapQBelowThreshold, depth, nOverlappingReads, nDeletedInRecord;
+		double percMapQBelowThreshold, depthExcludingIndels, totalDepthIncludingIndels, nDeletedInRecord;
 		boolean low_depth;
 
 		while(sli.hasNext()){
@@ -198,7 +198,8 @@ public class DarkRegionFinder {
 
 			/* Returns 1-based position */
 			pos = locus.getPosition();  
-					
+
+			
 			/* Ensure sequence is present in provided reference */
 			if(null == this.hgRefDictionary.getSequence(contig)){
 				logger.warn("BAM file contains alignments for " + contig
@@ -258,13 +259,23 @@ public class DarkRegionFinder {
 			low_depth = false;
 
 			/* Get depth, nOverlappingReads, and nDeletedInRecord at this position. */
-			depth = locus.getRecordAndOffsets().size();
-			nOverlappingReads = locus.size();
+			depthExcludingIndels = locus.getRecordAndOffsets().size();
+			totalDepthIncludingIndels = locus.size();
 			nDeletedInRecord = locus.getDeletedInRecord().size();
-
 			
-			/* Get number of reads with MAPQ ≤ threshold */
-			recs = locus.getRecordAndOffsets();
+
+			/* 
+			 * Get number of reads with MAPQ ≤ threshold 
+			 */
+			
+			/*
+			 * Get all records at this position, including those
+			 * that have a deletion at this position. Records/reads that have
+			 * a deletion are not included in the regular list of records, so
+			 * have to add them separately (locus.getDeletedInRecord()).
+			 */
+			recs = new ArrayList<RecordAndOffset>(locus.getRecordAndOffsets());
+			recs.addAll(locus.getDeletedInRecord()); 
 			nMapQBelowThreshold = 0;
 			for(RecordAndOffset rec : recs){
 				mapq = rec.getRecord().getMappingQuality();
@@ -274,17 +285,17 @@ public class DarkRegionFinder {
 			}
 
 
-			percMapQBelowThreshold = depth > 0 ? Math.round(nMapQBelowThreshold / depth * 100) : -1;
+			percMapQBelowThreshold = totalDepthIncludingIndels > 0 ? Math.round(nMapQBelowThreshold / totalDepthIncludingIndels * 100) : -1;
 
             /* Check if we're in a low depth Dark Region
              * A region is 'dark' by low_depth if depth is < MIN_DEPTH
              */
-            if(depth <= DarkRegionFinder.MIN_DEPTH ) {
+            if(depthExcludingIndels <= DarkRegionFinder.MIN_DEPTH ) {
 
                 /* Save low-depth 'dark' regions with low coverage */
                 low_depth = true;
                 lowDepthRegion.add(lowDepthRegionToString(contig, pos, nMapQBelowThreshold,
-                        depth, nDeletedInRecord, nOverlappingReads, percMapQBelowThreshold));
+                        depthExcludingIndels, nDeletedInRecord, totalDepthIncludingIndels, percMapQBelowThreshold));
                 consecLowDepth++;
             }
             else if ( consecLowDepth > DarkRegionFinder.MIN_REGION_SIZE ) {
@@ -315,12 +326,12 @@ public class DarkRegionFinder {
                 lowMapQRegion.clear();
                 consecLowMapQ = 0;
             }
-            else if ( percMapQBelowThreshold >= DarkRegionFinder.MIN_MAPQ_MASS) {
+            else if (percMapQBelowThreshold >= DarkRegionFinder.MIN_MAPQ_MASS) {
 
                 /* Save lowMapQ 'dark' region which has at mass > MIN_MAPQ_MASS of reads with mapq < MAPQ_THRESHOLD */
                 lowMapQRegion.add(lowMapQRegionToString(contig, pos,
-                        nMapQBelowThreshold, depth, nDeletedInRecord,
-                        nOverlappingReads, percMapQBelowThreshold));
+                        nMapQBelowThreshold, depthExcludingIndels, nDeletedInRecord,
+                        totalDepthIncludingIndels, percMapQBelowThreshold));
                 consecLowMapQ++;
 
             }
@@ -378,13 +389,13 @@ public class DarkRegionFinder {
      * @param contigName
      * @param position
      * @param nMapQBelowThreshold
-     * @param depth
+     * @param depthExcludingIndels
      * @param percentMapQBelowThreshold
      * @return
      */
 	private String lowDepthRegionToString(String contigName, int position,
-			int nMapQBelowThreshold, double depth, double nDeletedInRecord,
-			double nOverlappingReads, double percentMapQBelowThreshold) {
+			int nMapQBelowThreshold, double depthExcludingIndels, double nDeletedInRecord,
+			double totalDepthIncludingIndels, double percentMapQBelowThreshold) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
 		int posZeroBased = position - 1;
@@ -395,9 +406,9 @@ public class DarkRegionFinder {
                 .append(posZeroBased).append("\t")
                 .append(nMapQBelowThreshold).append("\t")
                 .append(percentMapQBelowThreshold).append("\t")
-                .append((int) depth).append("\t")
+                .append((int) depthExcludingIndels).append("\t")
                 .append(nDeletedInRecord).append("\t")
-                .append(nOverlappingReads).append("\n");
+                .append(totalDepthIncludingIndels).append("\n");
         return sb.toString();
 	}
 
@@ -406,13 +417,13 @@ public class DarkRegionFinder {
      * @param contigName
      * @param position
      * @param nMapQBelowThreshold
-     * @param depth
+     * @param depthExcludingIndels
      * @param percentMapQBelowThreshold
      * @return
      */
 	private String lowMapQRegionToString(String contigName, int position,
-			int nMapQBelowThreshold, double depth, double nDeletedInRecord,
-			double nOverlappingReads, double percentMapQBelowThreshold) {
+			int nMapQBelowThreshold, double depthExcludingIndels, double nDeletedInRecord,
+			double totalDepthIncludingIndels, double percentMapQBelowThreshold) {
 
 		/* Bed files are 0-based. locus.getPosition() returns 1-based. #Annoying */
         StringBuilder sb = new StringBuilder();
@@ -421,9 +432,9 @@ public class DarkRegionFinder {
                 .append(position).append("\t")
                 .append(nMapQBelowThreshold).append("\t")
                 .append(percentMapQBelowThreshold).append("\t")
-                .append((int) depth).append("\t")
+                .append((int) depthExcludingIndels).append("\t")
                 .append(nDeletedInRecord).append("\t")
-                .append(nOverlappingReads).append("\n");
+                .append(totalDepthIncludingIndels).append("\n");
         return sb.toString();
 	}
 	
