@@ -130,6 +130,11 @@ public class DarkRegionFinder {
 		if(null != DarkRegionFinder.intervalList && DarkRegionFinder.intervalList.size() > 0) {
 			sli = new SamLocusIterator(samReader, DarkRegionFinder.intervalList, true);
 			
+			/* Tell SLI to include indels. This is necessary to report
+			 * reads that overlap deletions.
+			 */
+			sli.setIncludeIndels(true);
+			
 			for(Interval interval : intervalList) {
 				System.out.println("Interval: " + interval.toString());
 			}
@@ -193,7 +198,7 @@ public class DarkRegionFinder {
 
 			/* Returns 1-based position */
 			pos = locus.getPosition();  
-			
+					
 			/* Ensure sequence is present in provided reference */
 			if(null == this.hgRefDictionary.getSequence(contig)){
 				logger.warn("BAM file contains alignments for " + contig
