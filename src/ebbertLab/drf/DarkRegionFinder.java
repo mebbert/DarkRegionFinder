@@ -389,10 +389,10 @@ public class DarkRegionFinder {
                 .append(posZeroBased).append("\t")
                 .append(posZeroBased).append("\t")
                 .append(nMapQBelowThreshold).append("\t")
-                .append(percentMapQBelowThreshold).append("\n")
+                .append(percentMapQBelowThreshold).append("\t")
                 .append((int) depth).append("\t")
                 .append(nDeletedInRecord).append("\t")
-                .append(nOverlappingReads).append("\t");
+                .append(nOverlappingReads).append("\n");
         return sb.toString();
 	}
 
@@ -415,10 +415,10 @@ public class DarkRegionFinder {
                 .append(position - 1).append("\t")
                 .append(position).append("\t")
                 .append(nMapQBelowThreshold).append("\t")
-                .append(percentMapQBelowThreshold).append("\n")
+                .append(percentMapQBelowThreshold).append("\t")
                 .append((int) depth).append("\t")
                 .append(nDeletedInRecord).append("\t")
-                .append(nOverlappingReads).append("\t");
+                .append(nOverlappingReads).append("\n");
         return sb.toString();
 	}
 	
