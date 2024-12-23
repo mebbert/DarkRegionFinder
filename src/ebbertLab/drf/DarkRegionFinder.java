@@ -29,6 +29,8 @@ import htsjdk.samtools.util.IntervalList;
 import htsjdk.samtools.util.SamLocusIterator;
 import htsjdk.samtools.util.SamLocusIterator.LocusInfo;
 import htsjdk.samtools.util.SamLocusIterator.RecordAndOffset;
+import htsjdk.samtools.filter.SamRecordFilter;
+import htsjdk.samtools.filter.SecondaryAlignmentFilter;
 
 
 /**
@@ -42,6 +44,7 @@ public class DarkRegionFinder {
 						MIN_REGION_SIZE, MIN_MAPQ_MASS,
                         MAX_ARRAY_SIZE = 10000;
 	private static boolean EXCLUSIVE_REGIONS;
+	private static boolean INCLUDE_SECONDARY;
 	private static IntervalList intervalList;
 	
 	Writer lowMapQWriter, lowDepthWriter, incWriter;
@@ -71,7 +74,7 @@ public class DarkRegionFinder {
                         File outMapQBed, File outIncBed, File hgRef,
                         final int mapQThreshold, final int minMapQMass, final int minRegionSize,
                         int minDepth, final boolean exclusiveRegions, final ValidationStringency vs
-                        , List<String> intervalStringList) throws IOException {
+                        , List<String> intervalStringList, final boolean includeSecondary) throws IOException {
 		
 
 		lowDepthWriter = new OutputStreamWriter(new GZIPOutputStream(
@@ -91,6 +94,7 @@ public class DarkRegionFinder {
 		DarkRegionFinder.MIN_DEPTH = minDepth;
 		DarkRegionFinder.MIN_MAPQ_MASS = minMapQMass;
 		DarkRegionFinder.EXCLUSIVE_REGIONS = exclusiveRegions;
+		DarkRegionFinder.INCLUDE_SECONDARY = includeSecondary;
 		
 		this.hgRefReader = new IndexedFastaSequenceFile(hgRef);
 		this.hgRefDictionary = hgRefReader.getSequenceDictionary();
@@ -152,6 +156,22 @@ public class DarkRegionFinder {
 		int baseQualityScoreCutoff = 0;
 		sli.setQualityScoreCutoff(baseQualityScoreCutoff);
 		
+		/* setSamFilters */
+		if( INCLUDE_SECONDARY == false ) {
+			/* The default is to exclude secondary alignment from the analysis.
+			 * 
+			 *  NOTE: Secondary alignments are ... 
+			 *  NOTE: Supplementary alignments are...
+			 *  */
+			List<SamRecordFilter> srf = new ArrayList<SamRecordFilter>();
+			srf.add(new SecondaryAlignmentFilter());
+		
+			sli.setSamFilters(srf);
+		} else {
+			/* When the flag is set it will include all alignments (primary, secondary, and supplementary) in the analysis. */
+
+			sli.setSamFilters(null);
+		}
 		
 		/* Walk along genome identifying 'dark' and 'camouflaged' regions */
 
