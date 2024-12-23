@@ -140,12 +140,15 @@ public class DarkRegionFinderEngine {
 						+ " and 'SILENT' will continue AND keep our mouth shut.");
 			
 		drfOptions
-				.addArgument("-S", "--secondary")
-				.dest("SECONDARY")
+				.addArgument("-S", "--include-supplementary-only")
+				.dest("INCLUDE_SUPPLEMENTARY")
 				.setDefault(false)
 				.action(Arguments.storeTrue())
 				.type(Boolean.class)
-				.help("By default this ignores secondary alignments but includes supplementary alignments. If set it includes secondary alignments in the analysis.\n\nNOTE: Secondary Alignments are reads that are multiply mapped. \nSupplementary alignments are chimeric alignments");
+				.help("Include supplementary alignments, but NOT secondary "
+						+ "alignments. \n\nNOTE: Secondary Alignments are reads "
+						+ "that are multiply mapped. \nSupplementary alignments "
+						+ "are chimeric alignments.");
 		
 		/* Setup IO options */
 		ioOptions
@@ -275,7 +278,8 @@ public class DarkRegionFinderEngine {
 			vs = ValidationStringency.SILENT;
 		}
 		
-		boolean includeSecondary = parsedArgs.getBoolean("SECONDARY");
+		boolean includeSupplementary = parsedArgs.getBoolean("INCLUDE_SUPPLEMENTARY");
+//		System.err.println("\nincludeSupplementary: " + includeSupplementary + "\n");
 		
 		try {
 			
@@ -313,7 +317,7 @@ public class DarkRegionFinderEngine {
 			DarkRegionFinder cgf = new DarkRegionFinder(new File(sam),
 					lowDepthBedFile, lowMapQBedFile, incBedFile,
 					new File(hgRef), mapQThresh, minMapQMass, minRegionSize, minDepth,
-                    exclusive, vs, intervalList, includeSecondary);
+                    exclusive, vs, intervalList, includeSupplementary);
 
 			cgf.startWalkingByLocus();
 

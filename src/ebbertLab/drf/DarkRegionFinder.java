@@ -44,7 +44,7 @@ public class DarkRegionFinder {
 						MIN_REGION_SIZE, MIN_MAPQ_MASS,
                         MAX_ARRAY_SIZE = 10000;
 	private static boolean EXCLUSIVE_REGIONS;
-	private static boolean INCLUDE_SECONDARY;
+	private static boolean INCLUDE_SUPPLEMENTARY;
 	private static IntervalList intervalList;
 	
 	Writer lowMapQWriter, lowDepthWriter, incWriter;
@@ -54,6 +54,8 @@ public class DarkRegionFinder {
 	
 	private IndexedFastaSequenceFile hgRefReader;
 	private SAMSequenceDictionary hgRefDictionary;
+	
+	private Runtime runtime;
 
     /**
      *
@@ -74,7 +76,7 @@ public class DarkRegionFinder {
                         File outMapQBed, File outIncBed, File hgRef,
                         final int mapQThreshold, final int minMapQMass, final int minRegionSize,
                         int minDepth, final boolean exclusiveRegions, final ValidationStringency vs
-                        , List<String> intervalStringList, final boolean includeSecondary) throws IOException {
+                        , List<String> intervalStringList, final boolean includeSupplementary) throws IOException {
 		
 
 		lowDepthWriter = new OutputStreamWriter(new GZIPOutputStream(
@@ -94,7 +96,7 @@ public class DarkRegionFinder {
 		DarkRegionFinder.MIN_DEPTH = minDepth;
 		DarkRegionFinder.MIN_MAPQ_MASS = minMapQMass;
 		DarkRegionFinder.EXCLUSIVE_REGIONS = exclusiveRegions;
-		DarkRegionFinder.INCLUDE_SECONDARY = includeSecondary;
+		DarkRegionFinder.INCLUDE_SUPPLEMENTARY = includeSupplementary;
 		
 		this.hgRefReader = new IndexedFastaSequenceFile(hgRef);
 		this.hgRefDictionary = hgRefReader.getSequenceDictionary();
@@ -117,6 +119,8 @@ public class DarkRegionFinder {
         for(SAMReadGroupRecord group : header.getReadGroups()){
         	samples.add(group.getSample());
         }
+        
+        runtime = Runtime.getRuntime();
 	}
 
 
@@ -132,13 +136,9 @@ public class DarkRegionFinder {
 		 * Otherwise, start from the beginning.
 		 */
 		if(null != DarkRegionFinder.intervalList && DarkRegionFinder.intervalList.size() > 0) {
-			sli = new SamLocusIterator(samReader, DarkRegionFinder.intervalList, true);
-			
-			/* Tell SLI to include indels. This is necessary to report
-			 * reads that overlap deletions.
-			 */
-			sli.setIncludeIndels(true);
-			
+			final boolean useIndex = true;
+			sli = new SamLocusIterator(samReader, DarkRegionFinder.intervalList, useIndex);
+		
 			for(Interval interval : intervalList) {
 				System.out.println("Interval: " + interval.toString());
 			}
@@ -146,6 +146,13 @@ public class DarkRegionFinder {
 		else {
 			sli = new SamLocusIterator(samReader);
 		}
+		
+					
+		/* Tell SLI to include indels. This is necessary to report
+		 * reads that overlap deletions.
+		 */
+		sli.setIncludeIndels(true);
+	
 		
 		/*
 		 * Set the base quality score cutoff to 0 
@@ -157,20 +164,22 @@ public class DarkRegionFinder {
 		sli.setQualityScoreCutoff(baseQualityScoreCutoff);
 		
 		/* setSamFilters */
-		if( INCLUDE_SECONDARY == false ) {
-			/* The default is to exclude secondary alignment from the analysis.
+		if( INCLUDE_SUPPLEMENTARY == true ) {
+        	logger.info("Including supplementary alignments, but NOT secondary");
+
+			/* 
+			 * Including supplementary and primary alignments ONLY.
 			 * 
-			 *  NOTE: Secondary alignments are ... 
-			 *  NOTE: Supplementary alignments are...
-			 *  */
+			 *  NOTE: Secondary alignments are multiply mapped
+			 *  NOTE: Supplementary alignments are chimeric
+			 *  
+			 *  Adding SecondaryAlignmentFilter() will REMOVE secondary alignments
+			 *  but NOT supplementary.
+			 */
 			List<SamRecordFilter> srf = new ArrayList<SamRecordFilter>();
 			srf.add(new SecondaryAlignmentFilter());
 		
 			sli.setSamFilters(srf);
-		} else {
-			/* When the flag is set it will include all alignments (primary, secondary, and supplementary) in the analysis. */
-
-			sli.setSamFilters(null);
 		}
 		
 		/* Walk along genome identifying 'dark' and 'camouflaged' regions */
@@ -234,7 +243,17 @@ public class DarkRegionFinder {
 
 			/* Track progress */ 
         	if(nLociAssessed > 0 && nLociAssessed % 1000000 == 0){
-        		logger.debug("Assessed " + nLociAssessed + " loci on " + contig);
+        		logger.debug("Total loci assessed: " + nLociAssessed );
+        		logger.debug("Current contig and position: " + contig + ":" + locus.getPosition());
+        		
+        		// Calculate the used memory
+                long totalMemory = runtime.totalMemory();
+                long freeMemory = runtime.freeMemory();
+                long usedMemory = totalMemory - freeMemory;
+
+                logger.debug("Total memory (bytes): " + totalMemory);
+                logger.debug("Free memory (bytes):  " + freeMemory);
+                logger.debug("Used memory (bytes):  " + usedMemory);
         	}		
 
 
