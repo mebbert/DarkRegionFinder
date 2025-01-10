@@ -185,8 +185,8 @@ public class DarkRegionFinder {
 		/* Walk along genome identifying 'dark' and 'camouflaged' regions */
 
 		LocusInfo locus;
-		int consecLowDepth = 0, consecLowMapQ = 0, consecInc = 0, pos,
-				nMapQBelowThreshold, mapq, nLociAssessed = 0;
+		double consecLowDepth = 0, consecLowMapQ = 0, consecInc = 0, nLociAssessed = 0;
+		int pos, nMapQBelowThreshold, mapq;
 		ArrayList<String> lowDepthRegion = new ArrayList<String>(),
 				lowMapQRegion = new ArrayList<String>(),
 				incRegion = new ArrayList<String>();
@@ -195,7 +195,7 @@ public class DarkRegionFinder {
 		List<RecordAndOffset> recs = null;
 		double percMapQBelowThreshold, depthExcludingIndels, totalDepthIncludingIndels, nDeletedInRecord;
 		boolean low_depth;
-
+		
 		while(sli.hasNext()){
 
 		    /* write out and clear regions if the arrays are getting too big (in order to save memory)
@@ -228,8 +228,7 @@ public class DarkRegionFinder {
 			/* Returns 1-based position */
 			pos = locus.getPosition();  
 
-			
-			/* Ensure sequence is present in provided reference */
+						/* Ensure sequence is present in provided reference */
 			if(null == this.hgRefDictionary.getSequence(contig)){
 				logger.warn("BAM file contains alignments for " + contig
 						+ " but this sequence was not found in the provided"
@@ -247,13 +246,14 @@ public class DarkRegionFinder {
         		logger.debug("Current contig and position: " + contig + ":" + locus.getPosition());
         		
         		// Calculate the used memory
-                long totalMemory = runtime.totalMemory();
-                long freeMemory = runtime.freeMemory();
-                long usedMemory = totalMemory - freeMemory;
+                //long totalMemory = runtime.totalMemory();
+                //long freeMemory = runtime.freeMemory();
+                //long usedMemory = totalMemory - freeMemory;
 
-                logger.debug("Total memory (bytes): " + totalMemory);
-                logger.debug("Free memory (bytes):  " + freeMemory);
-                logger.debug("Used memory (bytes):  " + usedMemory);
+                //logger.debug("Total memory (bytes): " + totalMemory);
+                //logger.debug("Free memory (bytes):  " + freeMemory);
+                //logger.debug("Used memory (bytes):  " + usedMemory);
+
         	}		
 
 
@@ -272,6 +272,7 @@ public class DarkRegionFinder {
 				if(consecLowMapQ >= DarkRegionFinder.MIN_REGION_SIZE){
 					writeRegion(lowMapQRegion, lowMapQWriter);
 				}
+                logger.debug("Base is N across all:  " + base);
 
 				/* Clear regardless (i.e., even if the region wasn't large enough) */
 				lowMapQRegion.clear();
@@ -349,7 +350,7 @@ public class DarkRegionFinder {
                 consecLowDepth = 0;
             }
 
-
+            
             /* check if Exclusive and already in dark:
              * if Exclusive is true and locus was already in low_depth, cannot be low mapQ so write out low MapQ and clear
              * else if not exclusive or not low_depth check if it is a low MapQ region
@@ -384,11 +385,13 @@ public class DarkRegionFinder {
                 lowMapQRegion.clear();
                 consecLowMapQ = 0;
             }
-            
+                
             nLociAssessed++;
+			
 		}
 		
-		/* Write regions if large enough */
+		        
+        /* Write regions if large enough */
         if(consecLowDepth >= DarkRegionFinder.MIN_REGION_SIZE){
             writeRegion(lowDepthRegion, lowDepthWriter);
         }
@@ -398,6 +401,7 @@ public class DarkRegionFinder {
 		if(consecInc >= DarkRegionFinder.MIN_REGION_SIZE) {
 			writeRegion(incRegion, incWriter);
 		}
+        
 
 		lowDepthWriter.close();
 		lowMapQWriter.close();
