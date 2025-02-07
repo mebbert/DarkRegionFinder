@@ -163,6 +163,12 @@ public class DarkRegionFinder {
 		int baseQualityScoreCutoff = 0;
 		sli.setQualityScoreCutoff(baseQualityScoreCutoff);
 		
+		/*
+		 * Limiting the number of reads allowed to be accumulated when analyzing a specific loci.
+		 */
+		
+		sli.setMaxReadsToAccumulatePerLocus(10000);
+		
 		/* setSamFilters */
 		if( INCLUDE_SUPPLEMENTARY == true ) {
         	logger.info("Including supplementary alignments, but NOT secondary");
@@ -272,7 +278,7 @@ public class DarkRegionFinder {
 				if(consecLowMapQ >= DarkRegionFinder.MIN_REGION_SIZE){
 					writeRegion(lowMapQRegion, lowMapQWriter);
 				}
-                logger.debug("Base is N across all:  " + base);
+                //logger.debug("Base is N across all:  " + base);
 
 				/* Clear regardless (i.e., even if the region wasn't large enough) */
 				lowMapQRegion.clear();
